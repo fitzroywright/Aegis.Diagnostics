@@ -1,10 +1,12 @@
 using Aegis.Diagnostics;
 using Common.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 DiagnosticsOptions diagnosticsOptions = builder.Configuration.GetSection("Diagnostics").Get<DiagnosticsOptions>() ?? new DiagnosticsOptions();
 builder.Services.AddSingleton(diagnosticsOptions);
-builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(8));
+builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddCommonDiagnostics();
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
 
@@ -21,11 +23,12 @@ app.Use(async (context, next) =>
         return;
     }
 
-    if (!context.Request.Headers.TryGetValue("X-Diagnostics-Key", out var supplied) ||
-        string.IsNullOrWhiteSpace(diagnosticsOptions.ApiKey) ||
-        !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-            System.Text.Encoding.UTF8.GetBytes(supplied.ToString()),
-            System.Text.Encoding.UTF8.GetBytes(diagnosticsOptions.ApiKey)))
+    string? expected = Environment.GetEnvironmentVariable(diagnosticsOptions.ApiKeyEnvironmentVariable);
+    bool authorized = !string.IsNullOrWhiteSpace(expected)
+        && context.Request.Headers.TryGetValue(diagnosticsOptions.ApiKeyHeader, out var supplied)
+        && FixedTimeEquals(expected, supplied.ToString());
+
+    if (!authorized)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         await context.Response.WriteAsync("Unauthorized");
@@ -48,8 +51,10 @@ app.MapGet("/api/engineering/diagnostics/targets", () => Results.Ok(diagnosticsO
     target.Name,
     target.ApplicationType,
     target.BaseUrl,
-    CommonComponents = target.CommonComponents,
-    ProbeCount = target.Probes.Count(probe => probe.Enabled)
+    target.HealthPath,
+    target.DiagnosticsRunPath,
+    target.DiagnosticsRunsPath,
+    target.RequireMachineCredential
 })));
 
 app.MapGet("/api/engineering/diagnostics/capabilities", (RemoteDiagnosticCatalog catalog) => Results.Ok(catalog.GetCapabilities()));
@@ -58,6 +63,12 @@ app.MapGet("/api/engineering/diagnostics/runs", async (int? take, IEngineeringDi
 {
     int requested = Math.Clamp(take ?? 25, 1, 100);
     return Results.Ok(await store.GetRecentAsync(requested, cancellationToken));
+});
+
+app.MapGet("/api/engineering/diagnostics/runs/{runId:guid}", async (Guid runId, IEngineeringDiagnosticRunStore store, CancellationToken cancellationToken) =>
+{
+    EngineeringDiagnosticRun? run = await store.GetAsync(runId, cancellationToken);
+    return run is null ? Results.NotFound() : Results.Ok(run);
 });
 
 app.MapPost("/api/engineering/diagnostics/run", async (EngineeringDiagnosticRunRequest request, EngineeringDiagnosticEngine engine, RemoteDiagnosticCatalog catalog, HttpContext context, CancellationToken cancellationToken) =>
@@ -69,7 +80,7 @@ app.MapPost("/api/engineering/diagnostics/run", async (EngineeringDiagnosticRunR
         diagnosticsOptions.EnvironmentName,
         requestedBy,
         request.Reason,
-        catalog.Build(),
+        catalog.Build(request.Level, request.Reason),
         cancellationToken);
     return Results.Ok(run);
 });
@@ -87,3 +98,11 @@ app.MapPost("/api/engineering/diagnostics/runs/{runId:guid}/resolve", async (Gui
 });
 
 app.Run();
+
+static bool FixedTimeEquals(string expected, string supplied)
+{
+    byte[] expectedBytes = Encoding.UTF8.GetBytes(expected);
+    byte[] suppliedBytes = Encoding.UTF8.GetBytes(supplied);
+    return expectedBytes.Length == suppliedBytes.Length
+        && CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes);
+}

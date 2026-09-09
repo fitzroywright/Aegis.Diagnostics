@@ -7,6 +7,10 @@
     <CommonRoot Condition="'$(CommonRoot)' == ''">$(MSBuildThisFileDirectory)..\Common</CommonRoot>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="Aegis.Diagnostics.UnitTests\**\*.cs" />
+    <None Remove="Aegis.Diagnostics.UnitTests\**\*" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="$(CommonRoot)\Common.Diagnostics\Common.Diagnostics.csproj" />
   </ItemGroup>
 </Project>

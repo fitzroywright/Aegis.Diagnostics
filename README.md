@@ -1,13 +1,13 @@
 # Aegis.Diagnostics
 
-Top-level Engineering Diagnostics application for the current Aegis application scope:
+Top-level Engineering Diagnostics application for the current scope:
 
 - RequestPortal
 - Aegis.Studio
 - Aegis.Cafeteria
-- Common.* platform components through Common.Diagnostics
+- Common.* through the diagnostics reported by those applications
 
-`Common.Diagnostics` remains the reusable diagnostics engine. `Aegis.Diagnostics` owns the operator UI, orchestration, run history and cross-application view.
+`Common.Diagnostics` remains the reusable engine and DTO contract. `Aegis.Diagnostics` owns orchestration, cross-application run history and the operator console.
 
 ## Diagnostic levels
 
@@ -17,11 +17,36 @@ Top-level Engineering Diagnostics application for the current Aegis application 
 - Level 2 — Integration Diagnostics
 - Level 1 — Full System Diagnostics
 
-Levels are cumulative. Level 1 is the deepest run and includes Levels 1 through 5.
+Levels are cumulative. Level 1 is the deepest run.
+
+## Uniform application protocol
+
+Every monitored application exposes:
+
+- `GET /health`
+- `POST /api/engineering/diagnostics/run`
+- `GET /api/engineering/diagnostics/runs`
+- `GET /api/engineering/diagnostics/runs/{runId}`
+- `POST /api/engineering/diagnostics/runs/{runId}/resolve`
+
+Level 5 uses `/health`. Levels 4 through 1 use the exact `Common.Diagnostics.EngineeringDiagnosticRunRequest` and `EngineeringDiagnosticRun` wire contract. Aegis.Diagnostics does not infer Common.* adoption; the application diagnostic results report their own real component health and adoption gaps.
+
+## Machine authentication
+
+The shared header is:
+
+`X-Aegis-Diagnostics-Key`
+
+Secrets are supplied through process environment variables, never `appsettings.json`:
+
+- `AEGIS_DIAGNOSTICS_KEY` — protects this console/API
+- `REQUESTPORTAL_DIAGNOSTICS_KEY` — RequestPortal machine endpoint
+- `STUDIO_DIAGNOSTICS_KEY` — Aegis.Studio machine endpoint
+- `CAFETERIA_DIAGNOSTICS_KEY` — Aegis.Cafeteria machine endpoint
+
+The browser console keeps its entered console key only in `sessionStorage` and sends it on API requests. Server-side comparisons use fixed-time comparison.
 
 ## Local layout
-
-Expected sibling layout:
 
 ```text
 D:\Projects\
@@ -44,8 +69,4 @@ dotnet restore
 dotnet run
 ```
 
-Update `Diagnostics:Targets` in `appsettings.json` for the actual internal URLs.
-
-## API protection
-
-Set `Diagnostics:RequireApiKey=true` and provide `Diagnostics:ApiKey` in production. API calls then require `X-Diagnostics-Key`. This can later be replaced by Common.Security authentication without changing the diagnostics engine.
+Set the target URLs in `Diagnostics:Targets` and provision the four environment variables before production use.

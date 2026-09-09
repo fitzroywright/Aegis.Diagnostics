@@ -35,9 +35,24 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.MapGet("/health", () => Results.Ok(new { status = "Healthy", application = diagnosticsOptions.ApplicationName, utc = DateTimeOffset.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "Healthy",
+    application = diagnosticsOptions.ApplicationName,
+    targets = diagnosticsOptions.Targets.Count,
+    utc = DateTimeOffset.UtcNow
+}));
 
-app.MapGet("/api/engineering/diagnostics/targets", () => Results.Ok(diagnosticsOptions.Targets.Select(target => new { target.Name, target.BaseUrl })));
+app.MapGet("/api/engineering/diagnostics/targets", () => Results.Ok(diagnosticsOptions.Targets.Select(target => new
+{
+    target.Name,
+    target.ApplicationType,
+    target.BaseUrl,
+    CommonComponents = target.CommonComponents,
+    ProbeCount = target.Probes.Count(probe => probe.Enabled)
+})));
+
+app.MapGet("/api/engineering/diagnostics/capabilities", (RemoteDiagnosticCatalog catalog) => Results.Ok(catalog.GetCapabilities()));
 
 app.MapGet("/api/engineering/diagnostics/runs", async (int? take, IEngineeringDiagnosticRunStore store, CancellationToken cancellationToken) =>
 {
@@ -48,7 +63,14 @@ app.MapGet("/api/engineering/diagnostics/runs", async (int? take, IEngineeringDi
 app.MapPost("/api/engineering/diagnostics/run", async (EngineeringDiagnosticRunRequest request, EngineeringDiagnosticEngine engine, RemoteDiagnosticCatalog catalog, HttpContext context, CancellationToken cancellationToken) =>
 {
     string requestedBy = context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "operator";
-    EngineeringDiagnosticRun run = await engine.RunAsync(request.Level, diagnosticsOptions.ApplicationName, diagnosticsOptions.EnvironmentName, requestedBy, request.Reason, catalog.Build(), cancellationToken);
+    EngineeringDiagnosticRun run = await engine.RunAsync(
+        request.Level,
+        diagnosticsOptions.ApplicationName,
+        diagnosticsOptions.EnvironmentName,
+        requestedBy,
+        request.Reason,
+        catalog.Build(),
+        cancellationToken);
     return Results.Ok(run);
 });
 

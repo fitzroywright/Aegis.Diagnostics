@@ -20,33 +20,9 @@ public sealed class RemoteDiagnosticCatalog
 
         foreach (DiagnosticTargetOptions target in options.Targets)
         {
-            foreach (DiagnosticProbeOptions probe in target.Probes.Where(probe => probe.Enabled))
-            {
-                EngineeringDiagnosticLevel level = ParseLevel(probe.Level);
-                string id = string.IsNullOrWhiteSpace(probe.Id)
-                    ? $"{target.Name}-{probe.Level}-{probe.Name}".ToLowerInvariant().Replace(' ', '-').Replace('.', '-')
-                    : probe.Id;
-
-                checks.Add(new EngineeringDiagnosticCheckDefinition(
-                    id,
-                    $"{target.Name} — {probe.Name}",
-                    level,
-                    cancellationToken => ProbeAsync(id, target, probe, cancellationToken)));
-            }
-
-            foreach (string component in target.CommonComponents.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                string id = $"{target.Name}-component-{component}".ToLowerInvariant().Replace('.', '-');
-                checks.Add(new EngineeringDiagnosticCheckDefinition(
-                    id,
-                    $"{target.Name} — {component} adoption",
-                    EngineeringDiagnosticLevel.Level4Analysis,
-                    _ => Task.FromResult(new EngineeringDiagnosticCheckResult(
-                        id,
-                        $"{target.Name} — {component} adoption",
-                        EngineeringDiagnosticStatus.Passed,
-                        $"{component} is declared as an application dependency in the diagnostics inventory."))));
-            }
+            AddConfiguredProbes(checks, target);
+            AddCoverageChecks(checks, target);
+            AddCommonAdoptionChecks(checks, target);
         }
 
         checks.Add(new EngineeringDiagnosticCheckDefinition(
@@ -70,17 +46,91 @@ public sealed class RemoteDiagnosticCatalog
             target.ApplicationType,
             target.BaseUrl,
             CommonComponents = target.CommonComponents,
-            Probes = target.Probes.Select(probe => new
-            {
-                probe.Id,
-                probe.Name,
-                probe.Level,
-                probe.Path,
-                probe.Method,
-                probe.Enabled,
-                probe.RequiresAuthentication
-            })
+            ExpectedCommonComponents = target.ExpectedCommonComponents,
+            MissingCommonComponents = target.ExpectedCommonComponents
+                .Except(target.CommonComponents, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            DiagnosticCoverage = Enumerable.Range(1, 5)
+                .OrderByDescending(level => level)
+                .Select(level => new
+                {
+                    Level = level,
+                    Covered = target.Probes.Any(probe => probe.Enabled && probe.Level == level),
+                    Probes = target.Probes
+                        .Where(probe => probe.Enabled && probe.Level == level)
+                        .Select(probe => new
+                        {
+                            probe.Id,
+                            probe.Name,
+                            probe.Path,
+                            probe.Method,
+                            probe.RequiresAuthentication
+                        })
+                        .ToArray()
+                })
+                .ToArray()
         }).ToArray();
+    }
+
+    private void AddConfiguredProbes(List<EngineeringDiagnosticCheckDefinition> checks, DiagnosticTargetOptions target)
+    {
+        foreach (DiagnosticProbeOptions probe in target.Probes.Where(probe => probe.Enabled))
+        {
+            EngineeringDiagnosticLevel level = ParseLevel(probe.Level);
+            string id = string.IsNullOrWhiteSpace(probe.Id)
+                ? $"{target.Name}-{probe.Level}-{probe.Name}".ToLowerInvariant().Replace(' ', '-').Replace('.', '-')
+                : probe.Id;
+
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
+                id,
+                $"{target.Name} — {probe.Name}",
+                level,
+                cancellationToken => ProbeAsync(id, target, probe, cancellationToken)));
+        }
+    }
+
+    private static void AddCoverageChecks(List<EngineeringDiagnosticCheckDefinition> checks, DiagnosticTargetOptions target)
+    {
+        for (int level = 4; level >= 1; level--)
+        {
+            if (target.Probes.Any(probe => probe.Enabled && probe.Level == level))
+            {
+                continue;
+            }
+
+            EngineeringDiagnosticLevel diagnosticLevel = ParseLevel(level);
+            string id = $"{target.Name}-level-{level}-coverage".ToLowerInvariant().Replace('.', '-');
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
+                id,
+                $"{target.Name} — Level {level} diagnostic coverage",
+                diagnosticLevel,
+                _ => Task.FromResult(new EngineeringDiagnosticCheckResult(
+                    id,
+                    $"{target.Name} — Level {level} diagnostic coverage",
+                    EngineeringDiagnosticStatus.Warning,
+                    $"{target.Name} has not yet exposed a machine-readable Level {level} diagnostic probe.",
+                    "Aegis.Diagnostics will not treat missing instrumentation as a passing result."))));
+        }
+    }
+
+    private static void AddCommonAdoptionChecks(List<EngineeringDiagnosticCheckDefinition> checks, DiagnosticTargetOptions target)
+    {
+        foreach (string component in target.ExpectedCommonComponents.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            bool adopted = target.CommonComponents.Contains(component, StringComparer.OrdinalIgnoreCase);
+            string id = $"{target.Name}-component-{component}".ToLowerInvariant().Replace('.', '-');
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
+                id,
+                $"{target.Name} — {component} adoption",
+                EngineeringDiagnosticLevel.Level4Analysis,
+                _ => Task.FromResult(new EngineeringDiagnosticCheckResult(
+                    id,
+                    $"{target.Name} — {component} adoption",
+                    adopted ? EngineeringDiagnosticStatus.Passed : EngineeringDiagnosticStatus.Warning,
+                    adopted
+                        ? $"{component} is integrated into the application according to the current platform inventory."
+                        : $"{component} is expected for this application but is not yet integrated according to the current platform inventory."))));
+        }
     }
 
     private async Task<EngineeringDiagnosticCheckResult> ProbeAsync(

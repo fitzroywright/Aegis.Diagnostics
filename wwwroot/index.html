@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aegis.Diagnostics</title>
+<style>
+:root{--bg:#05050a;--panel:#11111b;--text:#f5f2ff;--muted:#bbb6ce;--orange:#f4a261;--peach:#ffb4a2;--violet:#9d8cff;--blue:#7dc4ff;--red:#ff5d73;--green:#78e08f;--yellow:#ffd166}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}.shell{max-width:1500px;margin:auto;padding:18px}.top{display:grid;grid-template-columns:220px 1fr 180px;gap:10px}.pill{border-radius:30px 0 0 30px;background:var(--orange);min-height:74px}.title{background:var(--panel);border-bottom:10px solid var(--violet);padding:12px 22px;text-transform:uppercase}.title h1{margin:0;font-size:25px}.title p{margin:6px 0 0;color:var(--muted)}.cap{border-radius:0 30px 30px 0;background:var(--blue)}.layout{display:grid;grid-template-columns:285px 1fr;gap:14px;margin-top:16px}.levels{display:flex;flex-direction:column;gap:9px}.level{border:0;border-radius:28px 5px 5px 28px;padding:16px;text-align:left;font-weight:800;cursor:pointer;color:#111}.level small{display:block;margin-top:4px;font-weight:500}.l5{background:var(--blue)}.l4{background:var(--violet)}.l3{background:var(--green)}.l2{background:var(--yellow)}.l1{background:var(--red)}.main{background:var(--panel);border:1px solid #29263a;padding:18px;min-height:600px}.bar{display:flex;gap:8px;flex-wrap:wrap}.chip{background:#2b2940;padding:7px 12px;border-radius:18px}textarea{width:100%;min-height:72px;margin:14px 0;background:#0b0a12;color:var(--text);border:1px solid #4a4565;padding:10px}.run{display:grid;grid-template-columns:180px 1fr 160px;gap:12px;border-top:1px solid #343047;padding:14px 0}.check{padding:9px 10px;margin:7px 0;background:#191724;border-left:8px solid var(--blue)}.Passed{border-color:var(--green)}.Warning{border-color:var(--yellow)}.Failed{border-color:var(--red)}.InterventionRequired{border-color:var(--orange)}.status-Passed{color:var(--green)}.status-Warning{color:var(--yellow)}.status-Failed{color:var(--red)}.status-InterventionRequired{color:var(--orange)}.footer{margin-top:16px;border-top:10px solid var(--peach);padding-top:10px;color:var(--muted);font-size:12px}.busy{opacity:.55;pointer-events:none}@media(max-width:850px){.top{grid-template-columns:55px 1fr 55px}.layout{grid-template-columns:1fr}.levels{display:grid;grid-template-columns:1fr 1fr}.run{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+<div class="top"><div class="pill"></div><div class="title"><h1>Aegis.Diagnostics</h1><p>Engineering Diagnostics • RequestPortal • Aegis.Studio • Aegis.Cafeteria</p></div><div class="cap"></div></div>
+<div class="layout">
+<aside class="levels">
+<button class="level l5" data-level="5">LEVEL 5 — QUICK DIAGNOSTICS<small>Heartbeat, reachability and baseline health</small></button>
+<button class="level l4" data-level="4">LEVEL 4 — COMPONENT DIAGNOSTICS<small>Common components and application components</small></button>
+<button class="level l3" data-level="3">LEVEL 3 — SYSTEM DIAGNOSTICS<small>System-level health and dependencies</small></button>
+<button class="level l2" data-level="2">LEVEL 2 — INTEGRATION DIAGNOSTICS<small>Cross-application and external integrations</small></button>
+<button class="level l1" data-level="1">LEVEL 1 — FULL SYSTEM DIAGNOSTICS<small>Deepest complete engineering sweep</small></button>
+</aside>
+<main class="main">
+<div class="bar"><span class="chip">SYSTEM: AEGIS OPERATIONS</span><span class="chip" id="status">CONSOLE READY</span><span class="chip" id="clock"></span></div>
+<textarea id="reason" placeholder="Engineering reason / incident context (required for Level 2 and Level 1)"></textarea>
+<div id="runs">Loading diagnostic history...</div>
+</main>
+</div>
+<div class="footer">ENGINEERING DIAGNOSTICS • Levels are cumulative: Level 1 includes Levels 1–5. Level 5 is the fastest scan.</div>
+</div>
+<script>
+const api='/api/engineering/diagnostics';const runs=document.getElementById('runs');const statusEl=document.getElementById('status');const reason=document.getElementById('reason');
+setInterval(()=>document.getElementById('clock').textContent=new Date().toLocaleString(),1000);
+const levelNames={5:'Level 5 — Quick Diagnostics',4:'Level 4 — Component Diagnostics',3:'Level 3 — System Diagnostics',2:'Level 2 — Integration Diagnostics',1:'Level 1 — Full System Diagnostics'};
+const statusNames={1:'Passed',2:'Warning',3:'Failed',4:'InterventionRequired'};
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function sn(v){return typeof v==='number'?(statusNames[v]||v):v}function ln(v){return typeof v==='number'?(levelNames[v]||v):v}
+function render(run){const checks=(run.checks||[]).map(c=>`<div class="check ${esc(sn(c.status))}"><strong>${esc(c.name)}</strong> — <span class="status-${esc(sn(c.status))}">${esc(sn(c.status))}</span><div>${esc(c.summary)}</div>${c.evidence?`<small>${esc(c.evidence)}</small>`:''}</div>`).join('');return `<section class="run"><div><strong>${esc(ln(run.level))}</strong><br><small>${new Date(run.startedAt).toLocaleString()}</small></div><div><strong>${esc(run.requestedBy)}</strong>${run.reason?`<div>${esc(run.reason)}</div>`:''}${checks}</div><div class="status-${esc(sn(run.status))}"><strong>${esc(sn(run.status))}</strong></div></section>`}
+async function load(){const r=await fetch(`${api}/runs?take=25`);if(!r.ok){runs.textContent=`Unable to load runs (${r.status}).`;return}const data=await r.json();runs.innerHTML=data.length?data.map(render).join(''):'No diagnostic runs yet.'}
+async function run(level){if((level===1||level===2)&&!reason.value.trim()){alert('Level 2 and Level 1 require an engineering reason.');return}document.body.classList.add('busy');statusEl.textContent=`RUNNING LEVEL ${level}`;try{const r=await fetch(`${api}/run`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level,reason:reason.value.trim()||null})});if(!r.ok){alert(await r.text())}else{reason.value='';await load()}}finally{statusEl.textContent='CONSOLE READY';document.body.classList.remove('busy')}}
+document.querySelectorAll('[data-level]').forEach(b=>b.addEventListener('click',()=>run(Number(b.dataset.level))));load();
+</script>
+</body>
+</html>

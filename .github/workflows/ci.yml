@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Aegis.Diagnostics
+        uses: actions/checkout@v4
+
+      - name: Checkout Common.Diagnostics
+        uses: actions/checkout@v4
+        with:
+          repository: fitzroywright/Common.Diagnostics
+          path: Common/Common.Diagnostics
+
+      - name: Move Common to sibling layout
+        shell: pwsh
+        run: |
+          $sibling = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'Common'
+          if (Test-Path $sibling) { Remove-Item $sibling -Recurse -Force }
+          Move-Item (Join-Path $env:GITHUB_WORKSPACE 'Common') $sibling
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Aegis.Diagnostics.csproj
+
+      - name: Build
+        run: dotnet build Aegis.Diagnostics.csproj --no-restore --configuration Release

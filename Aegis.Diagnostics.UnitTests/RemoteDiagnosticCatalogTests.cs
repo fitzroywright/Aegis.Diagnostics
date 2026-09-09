@@ -55,7 +55,8 @@ public sealed class RemoteDiagnosticCatalogTests
     {
         const string variable = "AEGIS_DIAGNOSTICS_TEST_MISSING_KEY";
         Environment.SetEnvironmentVariable(variable, null);
-        CapturingHandler handler = new(_ => throw new InvalidOperationException("Network should not be called."));
+        Func<HttpRequestMessage, HttpResponseMessage> shouldNotCallNetwork = _ => throw new InvalidOperationException("Network should not be called.");
+        CapturingHandler handler = new(shouldNotCallNetwork);
         RemoteDiagnosticCatalog catalog = CreateCatalog(handler, requireCredential: true, environmentVariable: variable);
 
         EngineeringDiagnosticCheckDefinition check = catalog

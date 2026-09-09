@@ -128,17 +128,14 @@ public sealed class RemoteDiagnosticCatalog
                 return new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote diagnostics response could not be read.");
             }
 
-            EngineeringDiagnosticStatus status = remoteRun.HasFailures
-                ? EngineeringDiagnosticStatus.Failed
-                : remoteRun.HasWarnings
-                    ? EngineeringDiagnosticStatus.Warning
-                    : EngineeringDiagnosticStatus.Passed;
-            int failed = remoteRun.Results.Count(result => result.Status == EngineeringDiagnosticStatus.Failed);
-            int warnings = remoteRun.Results.Count(result => result.Status == EngineeringDiagnosticStatus.Warning);
+            EngineeringDiagnosticStatus status = remoteRun.Status;
+            int failed = remoteRun.Checks.Count(result => result.Status == EngineeringDiagnosticStatus.Failed);
+            int warnings = remoteRun.Checks.Count(result => result.Status is EngineeringDiagnosticStatus.Warning or EngineeringDiagnosticStatus.InterventionRequired);
             string summary = status switch
             {
                 EngineeringDiagnosticStatus.Failed => $"Remote Level {(int)level} diagnostics reported {failed} failure(s).",
                 EngineeringDiagnosticStatus.Warning => $"Remote Level {(int)level} diagnostics reported {warnings} warning(s).",
+                EngineeringDiagnosticStatus.InterventionRequired => $"Remote Level {(int)level} diagnostics require engineering intervention.",
                 _ => $"Remote Level {(int)level} diagnostics passed."
             };
 
@@ -147,7 +144,7 @@ public sealed class RemoteDiagnosticCatalog
                 displayName,
                 status,
                 summary,
-                $"Run {remoteRun.Id:D}; checks={remoteRun.Results.Count}; failed={failed}; warnings={warnings}; elapsed={stopwatch.ElapsedMilliseconds} ms.");
+                $"Run {remoteRun.RunId:D}; checks={remoteRun.Checks.Count}; failed={failed}; warnings={warnings}; elapsed={stopwatch.ElapsedMilliseconds} ms.");
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

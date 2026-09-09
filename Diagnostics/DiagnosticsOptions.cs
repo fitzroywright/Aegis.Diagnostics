@@ -16,6 +16,7 @@ public sealed class DiagnosticTargetOptions
     public string BaseUrl { get; init; } = string.Empty;
     public string ApplicationType { get; init; } = string.Empty;
     public List<string> CommonComponents { get; init; } = [];
+    public List<string> ExpectedCommonComponents { get; init; } = [];
     public List<DiagnosticProbeOptions> Probes { get; init; } = [];
 }
 

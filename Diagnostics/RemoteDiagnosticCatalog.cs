@@ -94,35 +94,35 @@ public sealed class RemoteDiagnosticCatalog
                 Uri healthUri = new(baseUri, target.HealthPath);
                 using HttpRequestMessage healthRequest = new(HttpMethod.Get, healthUri);
                 AddCredential(healthRequest, target, credential);
-                using HttpResponseMessage response = await client.SendAsync(healthRequest, cancellationToken).ConfigureAwait(false);
+                using HttpResponseMessage healthResponse = await client.SendAsync(healthRequest, cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
 
-                string evidence = $"HTTP {(int)response.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {healthUri}";
-                return response.IsSuccessStatusCode
+                string evidence = $"HTTP {(int)healthResponse.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {healthUri}";
+                return healthResponse.IsSuccessStatusCode
                     ? new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Passed, "Remote quick health check passed.", evidence)
                     : new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote quick health check failed.", evidence);
             }
 
             Uri runUri = new(baseUri, target.DiagnosticsRunPath);
-            using HttpRequestMessage request = new(HttpMethod.Post, runUri)
+            using HttpRequestMessage runRequest = new(HttpMethod.Post, runUri)
             {
                 Content = JsonContent.Create(new EngineeringDiagnosticRunRequest(level, reason))
             };
-            AddCredential(request, target, credential);
+            AddCredential(runRequest, target, credential);
 
-            using HttpResponseMessage response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage runResponse = await client.SendAsync(runRequest, cancellationToken).ConfigureAwait(false);
             stopwatch.Stop();
-            if (!response.IsSuccessStatusCode)
+            if (!runResponse.IsSuccessStatusCode)
             {
                 return new EngineeringDiagnosticCheckResult(
                     id,
                     displayName,
                     EngineeringDiagnosticStatus.Failed,
                     "Remote diagnostics endpoint returned an unsuccessful status.",
-                    $"HTTP {(int)response.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {runUri}");
+                    $"HTTP {(int)runResponse.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {runUri}");
             }
 
-            EngineeringDiagnosticRun? remoteRun = await response.Content.ReadFromJsonAsync<EngineeringDiagnosticRun>(cancellationToken: cancellationToken).ConfigureAwait(false);
+            EngineeringDiagnosticRun? remoteRun = await runResponse.Content.ReadFromJsonAsync<EngineeringDiagnosticRun>(cancellationToken: cancellationToken).ConfigureAwait(false);
             if (remoteRun is null)
             {
                 return new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote diagnostics response could not be read.");

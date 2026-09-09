@@ -14,9 +14,21 @@ public sealed class DiagnosticTargetOptions
 {
     public string Name { get; init; } = string.Empty;
     public string BaseUrl { get; init; } = string.Empty;
-    public string Level5Path { get; init; } = "/health";
-    public string Level4Path { get; init; } = "/health/components";
-    public string Level3Path { get; init; } = "/health/system";
-    public string Level2Path { get; init; } = "/health/integrations";
-    public string Level1Path { get; init; } = "/health/full";
+    public string ApplicationType { get; init; } = string.Empty;
+    public List<string> CommonComponents { get; init; } = [];
+    public List<DiagnosticProbeOptions> Probes { get; init; } = [];
+}
+
+public sealed class DiagnosticProbeOptions
+{
+    public string Id { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public int Level { get; init; } = 5;
+    public string Path { get; init; } = "/health";
+    public string Method { get; init; } = "GET";
+    public bool Enabled { get; init; } = true;
+    public bool RequiresAuthentication { get; init; }
+    public string? HeaderName { get; init; }
+    public string? HeaderEnvironmentVariable { get; init; }
+    public int[] SuccessStatusCodes { get; init; } = [200];
 }

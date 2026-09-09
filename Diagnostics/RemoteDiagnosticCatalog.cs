@@ -2,6 +2,7 @@ namespace Aegis.Diagnostics;
 
 using Common.Diagnostics;
 using System.Diagnostics;
+using System.Net.Http.Json;
 
 public sealed class RemoteDiagnosticCatalog
 {
@@ -14,16 +15,11 @@ public sealed class RemoteDiagnosticCatalog
         this.options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
-    public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build()
+    public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(
+        EngineeringDiagnosticLevel requestedLevel,
+        string? reason)
     {
         List<EngineeringDiagnosticCheckDefinition> checks = [];
-
-        foreach (DiagnosticTargetOptions target in options.Targets)
-        {
-            AddConfiguredProbes(checks, target);
-            AddCoverageChecks(checks, target);
-            AddCommonAdoptionChecks(checks, target);
-        }
 
         checks.Add(new EngineeringDiagnosticCheckDefinition(
             "aegis-diagnostics-self",
@@ -35,6 +31,16 @@ public sealed class RemoteDiagnosticCatalog
                 EngineeringDiagnosticStatus.Passed,
                 "Diagnostics console and Common.Diagnostics engine are running."))));
 
+        foreach (DiagnosticTargetOptions target in options.Targets)
+        {
+            string id = $"{target.Name}-level-{(int)requestedLevel}".ToLowerInvariant().Replace('.', '-');
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
+                id,
+                $"{target.Name} — Level {(int)requestedLevel}",
+                requestedLevel,
+                cancellationToken => ExecuteRemoteAsync(id, target, requestedLevel, reason, cancellationToken)));
+        }
+
         return checks;
     }
 
@@ -45,173 +51,132 @@ public sealed class RemoteDiagnosticCatalog
             target.Name,
             target.ApplicationType,
             target.BaseUrl,
-            CommonComponents = target.CommonComponents,
-            ExpectedCommonComponents = target.ExpectedCommonComponents,
-            MissingCommonComponents = target.ExpectedCommonComponents
-                .Except(target.CommonComponents, StringComparer.OrdinalIgnoreCase)
-                .ToArray(),
-            DiagnosticCoverage = Enumerable.Range(1, 5)
-                .OrderByDescending(level => level)
-                .Select(level => new
-                {
-                    Level = level,
-                    Covered = target.Probes.Any(probe => probe.Enabled && probe.Level == level),
-                    Probes = target.Probes
-                        .Where(probe => probe.Enabled && probe.Level == level)
-                        .Select(probe => new
-                        {
-                            probe.Id,
-                            probe.Name,
-                            probe.Path,
-                            probe.Method,
-                            probe.RequiresAuthentication
-                        })
-                        .ToArray()
-                })
-                .ToArray()
+            Protocol = "Common.Diagnostics Engineering Diagnostics v1",
+            target.HealthPath,
+            target.DiagnosticsRunPath,
+            target.DiagnosticsRunsPath,
+            target.RequireMachineCredential,
+            target.ApiKeyHeader,
+            CredentialAvailable = !target.RequireMachineCredential || HasCredential(target)
         }).ToArray();
     }
 
-    private void AddConfiguredProbes(List<EngineeringDiagnosticCheckDefinition> checks, DiagnosticTargetOptions target)
-    {
-        foreach (DiagnosticProbeOptions probe in target.Probes.Where(probe => probe.Enabled))
-        {
-            EngineeringDiagnosticLevel level = ParseLevel(probe.Level);
-            string id = string.IsNullOrWhiteSpace(probe.Id)
-                ? $"{target.Name}-{probe.Level}-{probe.Name}".ToLowerInvariant().Replace(' ', '-').Replace('.', '-')
-                : probe.Id;
-
-            checks.Add(new EngineeringDiagnosticCheckDefinition(
-                id,
-                $"{target.Name} — {probe.Name}",
-                level,
-                cancellationToken => ProbeAsync(id, target, probe, cancellationToken)));
-        }
-    }
-
-    private static void AddCoverageChecks(List<EngineeringDiagnosticCheckDefinition> checks, DiagnosticTargetOptions target)
-    {
-        for (int level = 4; level >= 1; level--)
-        {
-            if (target.Probes.Any(probe => probe.Enabled && probe.Level == level))
-            {
-                continue;
-            }
-
-            EngineeringDiagnosticLevel diagnosticLevel = ParseLevel(level);
-            string id = $"{target.Name}-level-{level}-coverage".ToLowerInvariant().Replace('.', '-');
-            checks.Add(new EngineeringDiagnosticCheckDefinition(
-                id,
-                $"{target.Name} — Level {level} diagnostic coverage",
-                diagnosticLevel,
-                _ => Task.FromResult(new EngineeringDiagnosticCheckResult(
-                    id,
-                    $"{target.Name} — Level {level} diagnostic coverage",
-                    EngineeringDiagnosticStatus.Warning,
-                    $"{target.Name} has not yet exposed a machine-readable Level {level} diagnostic probe.",
-                    "Aegis.Diagnostics will not treat missing instrumentation as a passing result."))));
-        }
-    }
-
-    private static void AddCommonAdoptionChecks(List<EngineeringDiagnosticCheckDefinition> checks, DiagnosticTargetOptions target)
-    {
-        foreach (string component in target.ExpectedCommonComponents.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            bool adopted = target.CommonComponents.Contains(component, StringComparer.OrdinalIgnoreCase);
-            string id = $"{target.Name}-component-{component}".ToLowerInvariant().Replace('.', '-');
-            checks.Add(new EngineeringDiagnosticCheckDefinition(
-                id,
-                $"{target.Name} — {component} adoption",
-                EngineeringDiagnosticLevel.Level4Analysis,
-                _ => Task.FromResult(new EngineeringDiagnosticCheckResult(
-                    id,
-                    $"{target.Name} — {component} adoption",
-                    adopted ? EngineeringDiagnosticStatus.Passed : EngineeringDiagnosticStatus.Warning,
-                    adopted
-                        ? $"{component} is integrated into the application according to the current platform inventory."
-                        : $"{component} is expected for this application but is not yet integrated according to the current platform inventory."))));
-        }
-    }
-
-    private async Task<EngineeringDiagnosticCheckResult> ProbeAsync(
+    private async Task<EngineeringDiagnosticCheckResult> ExecuteRemoteAsync(
         string id,
         DiagnosticTargetOptions target,
-        DiagnosticProbeOptions probe,
+        EngineeringDiagnosticLevel level,
+        string? reason,
         CancellationToken cancellationToken)
     {
-        string displayName = $"{target.Name} — {probe.Name}";
-
+        string displayName = $"{target.Name} — Level {(int)level}";
         if (!Uri.TryCreate(target.BaseUrl, UriKind.Absolute, out Uri? baseUri))
         {
-            return new EngineeringDiagnosticCheckResult(
-                id,
-                displayName,
-                EngineeringDiagnosticStatus.Warning,
-                "Target URL is not configured correctly.",
-                target.BaseUrl);
+            return Warning(id, displayName, "Target URL is not configured correctly.", target.BaseUrl);
         }
 
-        string? headerValue = null;
-        if (!string.IsNullOrWhiteSpace(probe.HeaderEnvironmentVariable))
+        string? credential = GetCredential(target);
+        if (target.RequireMachineCredential && string.IsNullOrWhiteSpace(credential))
         {
-            headerValue = Environment.GetEnvironmentVariable(probe.HeaderEnvironmentVariable);
-            if (probe.RequiresAuthentication && string.IsNullOrWhiteSpace(headerValue))
+            return Warning(
+                id,
+                displayName,
+                "Machine authentication credential is not available.",
+                $"Configure environment variable {target.ApiKeyEnvironmentVariable ?? "<not configured>"}.");
+        }
+
+        HttpClient client = httpClientFactory.CreateClient("diagnostics-targets");
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            if (level == EngineeringDiagnosticLevel.Level5Scan)
+            {
+                Uri healthUri = new(baseUri, target.HealthPath);
+                using HttpRequestMessage healthRequest = new(HttpMethod.Get, healthUri);
+                AddCredential(healthRequest, target, credential);
+                using HttpResponseMessage response = await client.SendAsync(healthRequest, cancellationToken).ConfigureAwait(false);
+                stopwatch.Stop();
+
+                string evidence = $"HTTP {(int)response.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {healthUri}";
+                return response.IsSuccessStatusCode
+                    ? new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Passed, "Remote quick health check passed.", evidence)
+                    : new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote quick health check failed.", evidence);
+            }
+
+            Uri runUri = new(baseUri, target.DiagnosticsRunPath);
+            using HttpRequestMessage request = new(HttpMethod.Post, runUri)
+            {
+                Content = JsonContent.Create(new EngineeringDiagnosticRunRequest(level, reason))
+            };
+            AddCredential(request, target, credential);
+
+            using HttpResponseMessage response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            stopwatch.Stop();
+            if (!response.IsSuccessStatusCode)
             {
                 return new EngineeringDiagnosticCheckResult(
                     id,
                     displayName,
-                    EngineeringDiagnosticStatus.Warning,
-                    "Probe is configured but its machine authentication credential is not available.",
-                    $"Environment variable {probe.HeaderEnvironmentVariable} is not set.");
+                    EngineeringDiagnosticStatus.Failed,
+                    "Remote diagnostics endpoint returned an unsuccessful status.",
+                    $"HTTP {(int)response.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {runUri}");
             }
-        }
 
-        Uri uri = new(baseUri, probe.Path);
-        HttpClient client = httpClientFactory.CreateClient("diagnostics-targets");
-        using HttpRequestMessage request = new(new HttpMethod(probe.Method), uri);
+            EngineeringDiagnosticRun? remoteRun = await response.Content.ReadFromJsonAsync<EngineeringDiagnosticRun>(cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (remoteRun is null)
+            {
+                return new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote diagnostics response could not be read.");
+            }
 
-        if (!string.IsNullOrWhiteSpace(probe.HeaderName) && !string.IsNullOrWhiteSpace(headerValue))
-        {
-            request.Headers.TryAddWithoutValidation(probe.HeaderName, headerValue);
-        }
+            EngineeringDiagnosticStatus status = remoteRun.HasFailures
+                ? EngineeringDiagnosticStatus.Failed
+                : remoteRun.HasWarnings
+                    ? EngineeringDiagnosticStatus.Warning
+                    : EngineeringDiagnosticStatus.Passed;
+            int failed = remoteRun.Results.Count(result => result.Status == EngineeringDiagnosticStatus.Failed);
+            int warnings = remoteRun.Results.Count(result => result.Status == EngineeringDiagnosticStatus.Warning);
+            string summary = status switch
+            {
+                EngineeringDiagnosticStatus.Failed => $"Remote Level {(int)level} diagnostics reported {failed} failure(s).",
+                EngineeringDiagnosticStatus.Warning => $"Remote Level {(int)level} diagnostics reported {warnings} warning(s).",
+                _ => $"Remote Level {(int)level} diagnostics passed."
+            };
 
-        Stopwatch stopwatch = Stopwatch.StartNew();
-        try
-        {
-            using HttpResponseMessage response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            stopwatch.Stop();
-            int statusCode = (int)response.StatusCode;
-            bool success = probe.SuccessStatusCodes.Length == 0
-                ? response.IsSuccessStatusCode
-                : probe.SuccessStatusCodes.Contains(statusCode);
-            string evidence = $"HTTP {statusCode} in {stopwatch.ElapsedMilliseconds} ms — {uri}";
-
-            return success
-                ? new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Passed, "Application-aware probe succeeded.", evidence)
-                : new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Application-aware probe returned an unexpected status.", evidence);
+            return new EngineeringDiagnosticCheckResult(
+                id,
+                displayName,
+                status,
+                summary,
+                $"Run {remoteRun.Id:D}; checks={remoteRun.Results.Count}; failed={failed}; warnings={warnings}; elapsed={stopwatch.ElapsedMilliseconds} ms.");
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
-            return new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Endpoint timed out.", $"{stopwatch.ElapsedMilliseconds} ms — {uri}");
+            return new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote diagnostics request timed out.", $"Elapsed {stopwatch.ElapsedMilliseconds} ms.");
         }
         catch (HttpRequestException exception)
         {
             stopwatch.Stop();
-            return new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Endpoint could not be reached.", $"{exception.GetType().Name} after {stopwatch.ElapsedMilliseconds} ms — {uri}");
+            return new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote diagnostics endpoint could not be reached.", $"{exception.GetType().Name}; elapsed={stopwatch.ElapsedMilliseconds} ms.");
         }
     }
 
-    private static EngineeringDiagnosticLevel ParseLevel(int level)
+    private static EngineeringDiagnosticCheckResult Warning(string id, string name, string summary, string? evidence = null)
+        => new(id, name, EngineeringDiagnosticStatus.Warning, summary, evidence);
+
+    private static bool HasCredential(DiagnosticTargetOptions target)
+        => !string.IsNullOrWhiteSpace(GetCredential(target));
+
+    private static string? GetCredential(DiagnosticTargetOptions target)
+        => string.IsNullOrWhiteSpace(target.ApiKeyEnvironmentVariable)
+            ? null
+            : Environment.GetEnvironmentVariable(target.ApiKeyEnvironmentVariable);
+
+    private static void AddCredential(HttpRequestMessage request, DiagnosticTargetOptions target, string? credential)
     {
-        return level switch
+        if (!string.IsNullOrWhiteSpace(credential))
         {
-            5 => EngineeringDiagnosticLevel.Level5Scan,
-            4 => EngineeringDiagnosticLevel.Level4Analysis,
-            3 => EngineeringDiagnosticLevel.Level3Verification,
-            2 => EngineeringDiagnosticLevel.Level2Repair,
-            1 => EngineeringDiagnosticLevel.Level1CriticalIntervention,
-            _ => throw new InvalidOperationException($"Unsupported diagnostic level {level}. Expected 1 through 5.")
-        };
+            request.Headers.TryAddWithoutValidation(target.ApiKeyHeader, credential);
+        }
     }
 }

@@ -20,8 +20,8 @@ public sealed class RemoteDiagnosticCatalogTests
 
         EngineeringDiagnosticCheckDefinition check = catalog
             .Build(EngineeringDiagnosticLevel.Level5Scan, null)
-            .Single(item => item.Id.StartsWith("aegis-studio", StringComparison.Ordinal));
-        EngineeringDiagnosticCheckResult result = await check.ExecuteAsync(CancellationToken.None);
+            .Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
+        EngineeringDiagnosticCheckResult result = await check.RunAsync(CancellationToken.None);
 
         Assert.Equal(EngineeringDiagnosticStatus.Passed, result.Status);
     }
@@ -44,8 +44,8 @@ public sealed class RemoteDiagnosticCatalogTests
 
         EngineeringDiagnosticCheckDefinition check = catalog
             .Build(EngineeringDiagnosticLevel.Level4Analysis, "component check")
-            .Single(item => item.Id.StartsWith("aegis-studio", StringComparison.Ordinal));
-        EngineeringDiagnosticCheckResult result = await check.ExecuteAsync(CancellationToken.None);
+            .Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
+        EngineeringDiagnosticCheckResult result = await check.RunAsync(CancellationToken.None);
 
         Assert.Equal(EngineeringDiagnosticStatus.Passed, result.Status);
     }
@@ -60,8 +60,8 @@ public sealed class RemoteDiagnosticCatalogTests
 
         EngineeringDiagnosticCheckDefinition check = catalog
             .Build(EngineeringDiagnosticLevel.Level3Verification, null)
-            .Single(item => item.Id.StartsWith("aegis-studio", StringComparison.Ordinal));
-        EngineeringDiagnosticCheckResult result = await check.ExecuteAsync(CancellationToken.None);
+            .Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
+        EngineeringDiagnosticCheckResult result = await check.RunAsync(CancellationToken.None);
 
         Assert.Equal(EngineeringDiagnosticStatus.Warning, result.Status);
         Assert.Contains("credential", result.Summary, StringComparison.OrdinalIgnoreCase);
@@ -70,6 +70,7 @@ public sealed class RemoteDiagnosticCatalogTests
     [Theory]
     [InlineData(EngineeringDiagnosticStatus.Warning, EngineeringDiagnosticStatus.Warning)]
     [InlineData(EngineeringDiagnosticStatus.Failed, EngineeringDiagnosticStatus.Failed)]
+    [InlineData(EngineeringDiagnosticStatus.InterventionRequired, EngineeringDiagnosticStatus.InterventionRequired)]
     public async Task RemoteOutcomePropagatesToAggregateStatus(
         EngineeringDiagnosticStatus remoteStatus,
         EngineeringDiagnosticStatus expected)
@@ -82,9 +83,9 @@ public sealed class RemoteDiagnosticCatalogTests
         RemoteDiagnosticCatalog catalog = CreateCatalog(handler, requireCredential: false);
 
         EngineeringDiagnosticCheckDefinition check = catalog
-            .Build(EngineeringDiagnosticLevel.Level2Repair, null)
-            .Single(item => item.Id.StartsWith("aegis-studio", StringComparison.Ordinal));
-        EngineeringDiagnosticCheckResult result = await check.ExecuteAsync(CancellationToken.None);
+            .Build(EngineeringDiagnosticLevel.Level2Repair, "repair investigation")
+            .Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
+        EngineeringDiagnosticCheckResult result = await check.RunAsync(CancellationToken.None);
 
         Assert.Equal(expected, result.Status);
     }
@@ -115,13 +116,14 @@ public sealed class RemoteDiagnosticCatalogTests
         DateTimeOffset now = DateTimeOffset.UtcNow;
         return new EngineeringDiagnosticRun(
             Guid.NewGuid(),
-            now,
-            now,
             EngineeringDiagnosticLevel.Level4Analysis,
             "Aegis.Studio",
             "Test",
             "tests",
             null,
+            now,
+            now,
+            status,
             [new EngineeringDiagnosticCheckResult("check", "Check", status, "Result")]);
     }
 

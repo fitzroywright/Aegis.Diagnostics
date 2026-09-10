@@ -139,12 +139,25 @@ public sealed class RemoteDiagnosticCatalog
                 _ => $"Remote Level {(int)level} diagnostics passed."
             };
 
+            EngineeringDiagnosticCheckResult? messaging = remoteRun.Checks.FirstOrDefault(result =>
+                result.Name.Equals("Common.Messaging", StringComparison.OrdinalIgnoreCase) ||
+                result.Name.Contains("Messaging", StringComparison.OrdinalIgnoreCase));
+
+            string evidence = $"Run {remoteRun.RunId:D}; checks={remoteRun.Checks.Count}; failed={failed}; warnings={warnings}; elapsed={stopwatch.ElapsedMilliseconds} ms.";
+            if (messaging is not null)
+            {
+                string messagingEvidence = string.IsNullOrWhiteSpace(messaging.Evidence)
+                    ? messaging.Summary
+                    : $"{messaging.Summary} {messaging.Evidence}";
+                evidence += $" Messaging: {messagingEvidence}";
+            }
+
             return new EngineeringDiagnosticCheckResult(
                 id,
                 displayName,
                 status,
                 summary,
-                $"Run {remoteRun.RunId:D}; checks={remoteRun.Checks.Count}; failed={failed}; warnings={warnings}; elapsed={stopwatch.ElapsedMilliseconds} ms.");
+                evidence);
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

@@ -51,6 +51,43 @@ public sealed class RemoteDiagnosticCatalogTests
     }
 
     [Fact]
+    public async Task StorageEvidenceIsPromotedIntoCentralDiagnosticResult()
+    {
+        CapturingHandler handler = new(_ =>
+        {
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            EngineeringDiagnosticRun run = new(
+                Guid.NewGuid(),
+                EngineeringDiagnosticLevel.Level4Analysis,
+                "Aegis.Studio",
+                "Test",
+                "tests",
+                null,
+                now,
+                now,
+                EngineeringDiagnosticStatus.Warning,
+                [new EngineeringDiagnosticCheckResult(
+                    "studio-l4-storage",
+                    "Common.Storage",
+                    EngineeringDiagnosticStatus.Warning,
+                    "Storage is degraded.",
+                    "Provider=LocalFileStorage; Writable=false")]);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(run) };
+        });
+        RemoteDiagnosticCatalog catalog = CreateCatalog(handler, requireCredential: false);
+
+        EngineeringDiagnosticCheckDefinition check = catalog
+            .Build(EngineeringDiagnosticLevel.Level4Analysis, "storage check")
+            .Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
+        EngineeringDiagnosticCheckResult result = await check.RunAsync(CancellationToken.None);
+
+        Assert.Equal(EngineeringDiagnosticStatus.Warning, result.Status);
+        Assert.Contains("Storage:", result.Evidence, StringComparison.Ordinal);
+        Assert.Contains("Storage is degraded", result.Evidence, StringComparison.Ordinal);
+        Assert.Contains("Writable=false", result.Evidence, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task MissingRequiredCredentialReturnsWarningWithoutNetworkCall()
     {
         const string variable = "AEGIS_DIAGNOSTICS_TEST_MISSING_KEY";

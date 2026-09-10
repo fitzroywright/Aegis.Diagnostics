@@ -97,10 +97,10 @@ public sealed class RemoteDiagnosticCatalog
                 using HttpResponseMessage healthResponse = await client.SendAsync(healthRequest, cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
 
-                string evidence = $"HTTP {(int)healthResponse.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {healthUri}";
+                string quickHealthEvidence = $"HTTP {(int)healthResponse.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {healthUri}";
                 return healthResponse.IsSuccessStatusCode
-                    ? new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Passed, "Remote quick health check passed.", evidence)
-                    : new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote quick health check failed.", evidence);
+                    ? new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Passed, "Remote quick health check passed.", quickHealthEvidence)
+                    : new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote quick health check failed.", quickHealthEvidence);
             }
 
             Uri runUri = new(baseUri, target.DiagnosticsRunPath);

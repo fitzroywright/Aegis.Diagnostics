@@ -139,18 +139,12 @@ public sealed class RemoteDiagnosticCatalog
                 _ => $"Remote Level {(int)level} diagnostics passed."
             };
 
-            EngineeringDiagnosticCheckResult? messaging = remoteRun.Checks.FirstOrDefault(result =>
-                result.Name.Equals("Common.Messaging", StringComparison.OrdinalIgnoreCase) ||
-                result.Name.Contains("Messaging", StringComparison.OrdinalIgnoreCase));
+            EngineeringDiagnosticCheckResult? messaging = FindSubsystemResult(remoteRun, "Common.Messaging", "Messaging");
+            EngineeringDiagnosticCheckResult? storage = FindSubsystemResult(remoteRun, "Common.Storage", "Storage");
 
             string evidence = $"Run {remoteRun.RunId:D}; checks={remoteRun.Checks.Count}; failed={failed}; warnings={warnings}; elapsed={stopwatch.ElapsedMilliseconds} ms.";
-            if (messaging is not null)
-            {
-                string messagingEvidence = string.IsNullOrWhiteSpace(messaging.Evidence)
-                    ? messaging.Summary
-                    : $"{messaging.Summary} {messaging.Evidence}";
-                evidence += $" Messaging: {messagingEvidence}";
-            }
+            evidence = AppendSubsystemEvidence(evidence, "Messaging", messaging);
+            evidence = AppendSubsystemEvidence(evidence, "Storage", storage);
 
             return new EngineeringDiagnosticCheckResult(
                 id,
@@ -169,6 +163,26 @@ public sealed class RemoteDiagnosticCatalog
             stopwatch.Stop();
             return new EngineeringDiagnosticCheckResult(id, displayName, EngineeringDiagnosticStatus.Failed, "Remote diagnostics endpoint could not be reached.", $"{exception.GetType().Name}; elapsed={stopwatch.ElapsedMilliseconds} ms.");
         }
+    }
+
+    private static EngineeringDiagnosticCheckResult? FindSubsystemResult(
+        EngineeringDiagnosticRun run,
+        string exactName,
+        string containsName)
+        => run.Checks.FirstOrDefault(result =>
+            result.Name.Equals(exactName, StringComparison.OrdinalIgnoreCase) ||
+            result.Name.Contains(containsName, StringComparison.OrdinalIgnoreCase));
+
+    private static string AppendSubsystemEvidence(
+        string evidence,
+        string subsystem,
+        EngineeringDiagnosticCheckResult? result)
+    {
+        if (result is null) return evidence;
+        string detail = string.IsNullOrWhiteSpace(result.Evidence)
+            ? result.Summary
+            : $"{result.Summary} {result.Evidence}";
+        return $"{evidence} {subsystem}: {detail}";
     }
 
     private static EngineeringDiagnosticCheckResult Warning(string id, string name, string summary, string? evidence = null)

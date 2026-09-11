@@ -129,8 +129,8 @@ public sealed class CommonMessagingIncidentNotificationPublisher(IServiceProvide
 
         MessageChannel channels = run.Status switch
         {
-            EngineeringDiagnosticStatus.InterventionRequired => MessageChannel.InApp | MessageChannel.MsEmail | MessageChannel.Slack | MessageChannel.MsTeams,
-            EngineeringDiagnosticStatus.Failed => MessageChannel.InApp | MessageChannel.MsEmail | MessageChannel.Slack,
+            EngineeringDiagnosticStatus.InterventionRequired => MessageChannel.InApp | MessageChannel.Smtp | MessageChannel.Slack | MessageChannel.MsTeams,
+            EngineeringDiagnosticStatus.Failed => MessageChannel.InApp | MessageChannel.Smtp | MessageChannel.Slack,
             EngineeringDiagnosticStatus.Warning => MessageChannel.InApp,
             _ => MessageChannel.InApp
         };

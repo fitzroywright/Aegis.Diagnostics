@@ -18,6 +18,12 @@ jobs:
           repository: fitzroywright/Common.Diagnostics
           path: Common/Common.Diagnostics
 
+      - name: Checkout Common.Messaging
+        uses: actions/checkout@v4
+        with:
+          repository: fitzroywright/Common.Messaging
+          path: Common/Common.Messaging
+
       - name: Move Common to sibling layout
         shell: pwsh
         run: |

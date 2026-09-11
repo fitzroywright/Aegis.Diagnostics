@@ -7,7 +7,7 @@ public sealed record DiagnosticPlaybookStep(int Order, string Action, string Pur
 public sealed record DiagnosticPlaybook(string Id, string Name, IReadOnlyList<string> MatchTerms, IReadOnlyList<DiagnosticPlaybookStep> Steps);
 public sealed record CorrelatedIncident(Guid IncidentId, DateTimeOffset CreatedAtUtc, EngineeringDiagnosticStatus Status, IReadOnlyList<string> Applications, IReadOnlyList<string> Signals, string Summary);
 public sealed record OrchestrationRecommendation(EngineeringDiagnosticLevel CurrentLevel, EngineeringDiagnosticLevel? RecommendedLevel, bool RequiresAuthorization, string Reason, IReadOnlyList<DiagnosticPlaybook> Playbooks, IReadOnlyList<CorrelatedIncident> Incidents);
-public sealed record OrchestratedDiagnosticResult(EngineeringDiagnosticRun Run, OrchestrationRecommendation Recommendation);
+public sealed record OrchestratedDiagnosticResult(EngineeringDiagnosticRun Run, OrchestrationRecommendation Recommendation, IReadOnlyList<EngineeringDiagnosticRun> Runs);
 
 public sealed class DiagnosticPlaybookCatalog
 {
@@ -166,25 +166,53 @@ public sealed class DiagnosticOrchestrationService(
         EngineeringDiagnosticPolicy.ValidateLevel(request.Level);
         EngineeringDiagnosticPolicy.ValidateReason(request.Level, request.Reason);
 
-        EngineeringDiagnosticRun run = await engine.RunAsync(
-            request.Level,
-            options.ApplicationName,
-            options.EnvironmentName,
-            requestedBy,
-            request.Reason,
-            remoteCatalog.Build(request.Level, request.Reason),
-            cancellationToken);
+        List<EngineeringDiagnosticRun> runs = [];
+        EngineeringDiagnosticRun run = await RunLevelAsync(request.Level, request.Reason, requestedBy, cancellationToken);
+        runs.Add(run);
+
+        while (run.Status != EngineeringDiagnosticStatus.Passed && TryGetAutomaticEvidenceLevel(run.Level, out EngineeringDiagnosticLevel nextAutomatic))
+        {
+            run = await RunLevelAsync(nextAutomatic, request.Reason, requestedBy, cancellationToken);
+            runs.Add(run);
+        }
 
         IReadOnlyList<EngineeringDiagnosticRun> recent = await store.GetRecentAsync(100, cancellationToken);
         IReadOnlyList<CorrelatedIncident> incidents = correlation.Correlate(recent);
-        IReadOnlyList<DiagnosticPlaybook> matched = playbooks.Match(run);
+        IReadOnlyList<DiagnosticPlaybook> matched = runs.SelectMany(playbooks.Match).DistinctBy(playbook => playbook.Id).ToArray();
         EngineeringDiagnosticLevel? next = RecommendNextLevel(run);
         bool requiresAuthorization = next is EngineeringDiagnosticLevel.Level2Repair or EngineeringDiagnosticLevel.Level1CriticalIntervention;
-        string reason = BuildRecommendationReason(run, next, incidents);
-        OrchestrationRecommendation recommendation = new(request.Level, next, requiresAuthorization, reason, matched, incidents);
+        string reason = BuildRecommendationReason(run, next, incidents, runs.Count);
+        OrchestrationRecommendation recommendation = new(run.Level, next, requiresAuthorization, reason, matched, incidents);
 
         await notifications.PublishAsync(run, recommendation, cancellationToken);
-        return new(run, recommendation);
+        return new(run, recommendation, runs);
+    }
+
+    private async Task<EngineeringDiagnosticRun> RunLevelAsync(
+        EngineeringDiagnosticLevel level,
+        string? reason,
+        string requestedBy,
+        CancellationToken cancellationToken)
+    {
+        return await engine.RunAsync(
+            level,
+            options.ApplicationName,
+            options.EnvironmentName,
+            requestedBy,
+            reason,
+            remoteCatalog.Build(level, reason),
+            cancellationToken);
+    }
+
+    private static bool TryGetAutomaticEvidenceLevel(EngineeringDiagnosticLevel current, out EngineeringDiagnosticLevel next)
+    {
+        next = current switch
+        {
+            EngineeringDiagnosticLevel.Level5Scan => EngineeringDiagnosticLevel.Level4Analysis,
+            EngineeringDiagnosticLevel.Level4Analysis => EngineeringDiagnosticLevel.Level3Verification,
+            _ => default
+        };
+        return current is EngineeringDiagnosticLevel.Level5Scan or EngineeringDiagnosticLevel.Level4Analysis;
     }
 
     private static EngineeringDiagnosticLevel? RecommendNextLevel(EngineeringDiagnosticRun run)
@@ -200,13 +228,25 @@ public sealed class DiagnosticOrchestrationService(
         };
     }
 
-    private static string BuildRecommendationReason(EngineeringDiagnosticRun run, EngineeringDiagnosticLevel? next, IReadOnlyList<CorrelatedIncident> incidents)
+    private static string BuildRecommendationReason(
+        EngineeringDiagnosticRun run,
+        EngineeringDiagnosticLevel? next,
+        IReadOnlyList<CorrelatedIncident> incidents,
+        int executedLevels)
     {
-        if (run.Status == EngineeringDiagnosticStatus.Passed) return "No escalation is recommended because the requested diagnostic level passed.";
-        string correlationText = incidents.Count == 0 ? "No cross-application incident correlation was detected." : $"{incidents.Count} cross-application correlated incident(s) were detected.";
-        if (next is null) return $"The run still requires attention, but no automatic escalation beyond Level 1 is defined. {correlationText}";
+        string orchestrationText = executedLevels > 1
+            ? $"Aegis.Diagnostics automatically completed {executedLevels} non-destructive evidence levels before stopping. "
+            : string.Empty;
+        if (run.Status == EngineeringDiagnosticStatus.Passed)
+            return $"{orchestrationText}No further escalation is recommended because the final diagnostic level passed.";
+
+        string correlationText = incidents.Count == 0
+            ? "No cross-application incident correlation was detected."
+            : $"{incidents.Count} cross-application correlated incident(s) were detected.";
+        if (next is null)
+            return $"{orchestrationText}The run still requires attention, but no automatic escalation beyond Level 1 is defined. {correlationText}";
         if (next is EngineeringDiagnosticLevel.Level2Repair or EngineeringDiagnosticLevel.Level1CriticalIntervention)
-            return $"Escalation to Level {(int)next} is recommended, but explicit operator reason/authorization is required and no destructive action will run automatically. {correlationText}";
-        return $"Escalation to Level {(int)next} is recommended for deeper evidence collection. {correlationText}";
+            return $"{orchestrationText}Escalation to Level {(int)next} is recommended, but explicit operator reason/authorization is required and no destructive action will run automatically. {correlationText}";
+        return $"{orchestrationText}Escalation to Level {(int)next} is recommended for deeper evidence collection. {correlationText}";
     }
 }

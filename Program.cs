@@ -9,6 +9,10 @@ builder.Services.AddSingleton(diagnosticsOptions);
 builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddCommonDiagnostics();
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
+builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();
+builder.Services.AddSingleton<IncidentCorrelationService>();
+builder.Services.AddSingleton<IIncidentNotificationPublisher, CommonMessagingIncidentNotificationPublisher>();
+builder.Services.AddSingleton<DiagnosticOrchestrationService>();
 
 WebApplication app = builder.Build();
 
@@ -59,6 +63,15 @@ app.MapGet("/api/engineering/diagnostics/targets", () => Results.Ok(diagnosticsO
 
 app.MapGet("/api/engineering/diagnostics/capabilities", (RemoteDiagnosticCatalog catalog) => Results.Ok(catalog.GetCapabilities()));
 
+app.MapGet("/api/engineering/diagnostics/playbooks", (DiagnosticPlaybookCatalog playbooks) => Results.Ok(playbooks.GetAll()));
+
+app.MapGet("/api/engineering/diagnostics/incidents", async (int? minutes, IEngineeringDiagnosticRunStore store, IncidentCorrelationService correlation, CancellationToken cancellationToken) =>
+{
+    int requestedMinutes = Math.Clamp(minutes ?? 15, 1, 1440);
+    IReadOnlyList<EngineeringDiagnosticRun> runs = await store.GetRecentAsync(500, cancellationToken);
+    return Results.Ok(correlation.Correlate(runs, TimeSpan.FromMinutes(requestedMinutes)));
+});
+
 app.MapGet("/api/engineering/diagnostics/runs", async (int? take, IEngineeringDiagnosticRunStore store, CancellationToken cancellationToken) =>
 {
     int requested = Math.Clamp(take ?? 25, 1, 100);
@@ -71,18 +84,18 @@ app.MapGet("/api/engineering/diagnostics/runs/{runId:guid}", async (Guid runId, 
     return run is null ? Results.NotFound() : Results.Ok(run);
 });
 
-app.MapPost("/api/engineering/diagnostics/run", async (EngineeringDiagnosticRunRequest request, EngineeringDiagnosticEngine engine, RemoteDiagnosticCatalog catalog, HttpContext context, CancellationToken cancellationToken) =>
+app.MapPost("/api/engineering/diagnostics/run", async (EngineeringDiagnosticRunRequest request, DiagnosticOrchestrationService orchestration, HttpContext context, CancellationToken cancellationToken) =>
 {
-    string requestedBy = context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "operator";
-    EngineeringDiagnosticRun run = await engine.RunAsync(
-        request.Level,
-        diagnosticsOptions.ApplicationName,
-        diagnosticsOptions.EnvironmentName,
-        requestedBy,
-        request.Reason,
-        catalog.Build(request.Level, request.Reason),
-        cancellationToken);
-    return Results.Ok(run);
+    try
+    {
+        string requestedBy = context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "operator";
+        OrchestratedDiagnosticResult result = await orchestration.RunAsync(request, requestedBy, cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(new { error = exception.Message });
+    }
 });
 
 app.MapPost("/api/engineering/diagnostics/runs/{runId:guid}/resolve", async (Guid runId, EngineeringDiagnosticResolutionRequest request, IEngineeringDiagnosticRunStore store, HttpContext context, CancellationToken cancellationToken) =>

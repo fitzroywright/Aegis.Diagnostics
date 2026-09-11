@@ -12,5 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="$(CommonRoot)\Common.Diagnostics\Common.Diagnostics.csproj" />
+    <ProjectReference Include="$(CommonRoot)\Common.Messaging\Common.Messaging.csproj" />
   </ItemGroup>
 </Project>

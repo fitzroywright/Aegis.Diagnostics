@@ -1,5 +1,6 @@
 using Aegis.Diagnostics;
 using Common.Diagnostics;
+using Xunit;
 
 namespace Aegis.Diagnostics.UnitTests;
 

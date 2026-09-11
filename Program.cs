@@ -8,6 +8,7 @@ DiagnosticsOptions diagnosticsOptions = builder.Configuration.GetSection("Diagno
 builder.Services.AddSingleton(diagnosticsOptions);
 builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddCommonDiagnostics();
+builder.Services.AddDiagnosticsMessaging(builder.Configuration);
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
 builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();
 builder.Services.AddSingleton<IncidentCorrelationService>();

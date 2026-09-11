@@ -31,6 +31,22 @@ Every monitored application exposes:
 
 Level 5 uses `/health`. Levels 4 through 1 use the exact `Common.Diagnostics.EngineeringDiagnosticRunRequest` and `EngineeringDiagnosticRun` wire contract. Aegis.Diagnostics does not infer Common.* adoption; the application diagnostic results report their own real component health and adoption gaps.
 
+## Orchestration responsibilities
+
+Aegis.Diagnostics owns the centralized application-layer concerns that were originally explored in Aegis.Engineering:
+
+- target/application registration and discovery;
+- remote-safe diagnostic initiation;
+- consolidated cross-application audit history;
+- operator escalation and resolution workflows;
+- diagnostic playbook selection and presentation;
+- correlation of related runs across applications;
+- notification fan-out to Slack, Teams, email, or other configured providers.
+
+These concerns deliberately remain outside `Common.Diagnostics`. See `docs/ORCHESTRATION-MODEL.md` for the ownership and safety boundary.
+
+The retired `Aegis.Engineering` repository is not a runtime dependency.
+
 ## Machine authentication
 
 The shared header is:

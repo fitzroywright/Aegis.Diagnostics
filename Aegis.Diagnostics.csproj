@@ -16,4 +16,7 @@
     <ProjectReference Include="$(CommonRoot)\Common.Messaging\Common.Messaging.Hosting\Common.Messaging.Hosting.csproj" />
     <ProjectReference Include="$(CommonRoot)\Common.Secrets\Common.Secrets.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="configuration\Aegis.Diagnostics.configuration-contract.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

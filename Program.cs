@@ -9,8 +9,11 @@ DiagnosticsOptions diagnosticsOptions = builder.Configuration.GetSection("Diagno
 builder.Services.AddSingleton(diagnosticsOptions);
 builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddCommonDiagnostics();
-builder.Services.AddCommonSecrets(builder.Configuration);
-builder.Services.AddCommonSecretsDiagnostics();
+if (builder.Configuration.GetSection("CommonSecrets").Exists())
+{
+    builder.Services.AddCommonSecrets(builder.Configuration);
+    builder.Services.AddCommonSecretsDiagnostics();
+}
 builder.Services.AddDiagnosticsMessaging(builder.Configuration);
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
 builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();

@@ -24,6 +24,12 @@ jobs:
           repository: fitzroywright/Common.Messaging
           path: Common/Common.Messaging
 
+      - name: Checkout Common.Secrets
+        uses: actions/checkout@v4
+        with:
+          repository: fitzroywright/Common.Secrets
+          path: Common/Common.Secrets
+
       - name: Move Common to sibling layout
         shell: pwsh
         run: |

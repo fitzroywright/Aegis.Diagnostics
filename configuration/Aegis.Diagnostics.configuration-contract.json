@@ -1,0 +1,60 @@
+{
+  "applicationId": "Aegis.Diagnostics",
+  "displayName": "Aegis Diagnostics",
+  "version": "1.0.0",
+  "requirements": [
+    {
+      "id": "diagnostics-key",
+      "displayName": "Diagnostics operator machine credential",
+      "kind": "Secret",
+      "required": true,
+      "purpose": "Protects the diagnostics operator and orchestration surface.",
+      "secretName": "Aegis:Diagnostics:Key",
+      "validator": "secret"
+    },
+    {
+      "id": "run-store",
+      "displayName": "Diagnostic run history store",
+      "kind": "Configuration",
+      "required": true,
+      "purpose": "Defines durable storage for engineering diagnostic run history.",
+      "configurationKey": "Diagnostics:RunStorePath"
+    },
+    {
+      "id": "requestportal-target",
+      "displayName": "Request Portal diagnostics endpoint",
+      "kind": "ExternalService",
+      "required": true,
+      "purpose": "Declares the Request Portal target address; runtime health remains owned by Diagnostics.",
+      "configurationKey": "Diagnostics:Targets:0:BaseUrl",
+      "validator": "uri"
+    },
+    {
+      "id": "studio-target",
+      "displayName": "Studio diagnostics endpoint",
+      "kind": "ExternalService",
+      "required": true,
+      "purpose": "Declares the Studio target address; runtime health remains owned by Diagnostics.",
+      "configurationKey": "Diagnostics:Targets:1:BaseUrl",
+      "validator": "uri"
+    },
+    {
+      "id": "cafeteria-target",
+      "displayName": "Cafeteria diagnostics endpoint",
+      "kind": "ExternalService",
+      "required": true,
+      "purpose": "Declares the Cafeteria target address; runtime health remains owned by Diagnostics.",
+      "configurationKey": "Diagnostics:Targets:2:BaseUrl",
+      "validator": "uri"
+    },
+    {
+      "id": "sensornetwork-target",
+      "displayName": "Sensor Network diagnostics endpoint",
+      "kind": "ExternalService",
+      "required": true,
+      "purpose": "Declares the Sensor Network target address; runtime health remains owned by Diagnostics.",
+      "configurationKey": "Diagnostics:Targets:3:BaseUrl",
+      "validator": "uri"
+    }
+  ]
+}

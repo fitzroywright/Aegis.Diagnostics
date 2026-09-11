@@ -50,6 +50,7 @@ public static class DiagnosticsMessagingRegistration
         services.AddSingleton<IMessageStore, InMemoryMessageStore>();
         services.AddCommonMessagingQueuedDelivery(durable: true);
         services.AddCommonMessagingDiagnostics();
+        services.AddCommonMessagingSecrets();
 
         IConfigurationSection slack = configuration.GetSection("Diagnostics:Notifications:Slack");
         if (slack.GetValue("Enabled", false))

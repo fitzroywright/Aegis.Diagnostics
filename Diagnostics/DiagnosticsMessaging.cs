@@ -50,10 +50,21 @@ public static class DiagnosticsMessagingRegistration
         services.AddSingleton<IMessageStore, InMemoryMessageStore>();
         services.AddCommonMessagingQueuedDelivery(durable: true);
         services.AddCommonMessagingDiagnostics();
-        services.AddCommonMessagingSecrets();
 
         IConfigurationSection slack = configuration.GetSection("Diagnostics:Notifications:Slack");
-        if (slack.GetValue("Enabled", false))
+        IConfigurationSection teams = configuration.GetSection("Diagnostics:Notifications:Teams");
+        IConfigurationSection smtp = configuration.GetSection("Diagnostics:Notifications:Smtp");
+
+        bool slackEnabled = slack.GetValue("Enabled", false);
+        bool teamsEnabled = teams.GetValue("Enabled", false);
+        bool smtpEnabled = smtp.GetValue("Enabled", false);
+
+        if (slackEnabled || teamsEnabled || smtpEnabled)
+        {
+            services.AddCommonMessagingSecrets();
+        }
+
+        if (slackEnabled)
         {
             services.AddSlackMessagingChannel(new SlackMessageOptions
             {
@@ -62,8 +73,7 @@ public static class DiagnosticsMessagingRegistration
             });
         }
 
-        IConfigurationSection teams = configuration.GetSection("Diagnostics:Notifications:Teams");
-        if (teams.GetValue("Enabled", false))
+        if (teamsEnabled)
         {
             services.AddTeamsMessagingChannel(new TeamsMessageOptions
             {
@@ -72,8 +82,7 @@ public static class DiagnosticsMessagingRegistration
             });
         }
 
-        IConfigurationSection smtp = configuration.GetSection("Diagnostics:Notifications:Smtp");
-        if (smtp.GetValue("Enabled", false))
+        if (smtpEnabled)
         {
             services.AddSmtpMessagingChannel(new SmtpMessageOptions
             {

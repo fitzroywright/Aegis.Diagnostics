@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Aegis.Diagnostics.csproj" />
+  <Project Path="Aegis.Diagnostics.UnitTests/Aegis.Diagnostics.UnitTests.csproj" />
+  <Project Path="../Common/Common.Diagnostics/Common.Diagnostics.csproj" />
+  <Project Path="../Common/Common.Messaging/Common.Messaging.csproj" />
+  <Project Path="../Common/Common.Messaging/Common.Messaging.Hosting/Common.Messaging.Hosting.csproj" />
+  <Project Path="../Common/Common.Secrets/Common.Secrets.csproj" />
+</Solution>

@@ -1,88 +1,47 @@
 # Aegis.Diagnostics
 
-Top-level Engineering Diagnostics application for the current scope:
+`Aegis.Diagnostics` is the code/product identity. Its operator-facing UI is branded **System Diagnostics**.
 
-- RequestPortal
-- Aegis.Studio
-- Aegis.Cafeteria
-- Common.* through the diagnostics reported by those applications
+`Common.Diagnostics` remains the reusable engine and wire-contract library. Aegis.Diagnostics owns aggregation, cross-application history, correlation, operator workflow and the responsive System Diagnostics console.
 
-`Common.Diagnostics` remains the reusable engine and DTO contract. `Aegis.Diagnostics` owns orchestration, cross-application run history and the operator console.
+## Ownership boundary
 
-## Diagnostic levels
+- **System Configuration / Aegis.Configuration:** what an application says it requires and whether it reports that requirement configured.
+- **System Diagnostics / Aegis.Diagnostics:** whether the running application and its dependencies are actually working.
+- Applications are authoritative for their own diagnostic results.
+- Secrets are never displayed or returned as diagnostic evidence.
+- Configuration completeness is not a diagnostic health test.
 
-- Level 5 — Quick Diagnostics
-- Level 4 — Component Diagnostics
-- Level 3 — System Diagnostics
-- Level 2 — Integration Diagnostics
-- Level 1 — Full System Diagnostics
+## Stable identity
 
-Levels are cumulative. Level 1 is the deepest run.
+Targets use the same `ApplicationId`, `SiteId`, `InstanceId` and version identity used by Aegis.Configuration. Current target identities include `RequestPortal`, `Aegis.Studio`, `Aegis.Cafeteria.Services` and `Aegis.SensorNetwork.ControlPlane`.
+
+## Starfleet Engineering Protocol lifecycle
+
+The internal engineering protocol name is retained, while the UI uses generic System Diagnostics branding and a generic diagnostics logo.
+
+- Level 5 — Scan: fast baseline health and heartbeat.
+- Level 4 — Analysis: deeper dependency, data-flow and error evidence.
+- Level 3 — Verification: verify a suspected fault or recovery.
+- Level 2 — Repair: authorized controlled repair stage.
+- Level 1 — Critical Intervention: high-trust emergency intervention.
+
+Levels are cumulative according to Common.Diagnostics policy. Level 2 and Level 1 require an engineering reason and remain gated intervention stages.
 
 ## Uniform application protocol
 
-Every monitored application exposes:
+Every monitored independently deployed application should expose `GET /health`, `POST /api/engineering/diagnostics/run`, `GET /api/engineering/diagnostics/runs`, `GET /api/engineering/diagnostics/runs/{runId}`, and `POST /api/engineering/diagnostics/runs/{runId}/resolve` where resolution is supported.
 
-- `GET /health`
-- `POST /api/engineering/diagnostics/run`
-- `GET /api/engineering/diagnostics/runs`
-- `GET /api/engineering/diagnostics/runs/{runId}`
-- `POST /api/engineering/diagnostics/runs/{runId}/resolve`
-
-Level 5 uses `/health`. Levels 4 through 1 use the exact `Common.Diagnostics.EngineeringDiagnosticRunRequest` and `EngineeringDiagnosticRun` wire contract. Aegis.Diagnostics does not infer Common.* adoption; the application diagnostic results report their own real component health and adoption gaps.
-
-## Orchestration responsibilities
-
-Aegis.Diagnostics owns the centralized application-layer concerns that were originally explored in Aegis.Engineering:
-
-- target/application registration and discovery;
-- remote-safe diagnostic initiation;
-- consolidated cross-application audit history;
-- operator escalation and resolution workflows;
-- diagnostic playbook selection and presentation;
-- correlation of related runs across applications;
-- notification fan-out to Slack, Teams, email, or other configured providers.
-
-These concerns deliberately remain outside `Common.Diagnostics`. See `docs/ORCHESTRATION-MODEL.md` for the ownership and safety boundary.
-
-The retired `Aegis.Engineering` repository is not a runtime dependency.
+Level 5 uses `/health`. Deeper levels use `Common.Diagnostics.EngineeringDiagnosticRunRequest` and `EngineeringDiagnosticRun`. System Diagnostics does not infer configuration state or Common.* adoption; application diagnostic results report their own component health.
 
 ## Machine authentication
 
-The shared header is:
+The default machine header is `X-Aegis-Diagnostics-Key`. Credentials are supplied through process environment variables or the configured secrets provider and are never committed to appsettings. The browser console stores its entered operator key only in `sessionStorage`; server-side comparisons use fixed-time comparison.
 
-`X-Aegis-Diagnostics-Key`
+## Configuration integration
 
-Secrets are supplied through process environment variables, never `appsettings.json`:
+Aegis.Diagnostics registers its own configuration contract with Aegis.Configuration when `AegisConfiguration:BaseUrl` and the registration credential are available. Publication is best-effort and Diagnostics remains operational if Configuration is unavailable.
 
-- `AEGIS_DIAGNOSTICS_KEY` — protects this console/API
-- `REQUESTPORTAL_DIAGNOSTICS_KEY` — RequestPortal machine endpoint
-- `STUDIO_DIAGNOSTICS_KEY` — Aegis.Studio machine endpoint
-- `CAFETERIA_DIAGNOSTICS_KEY` — Aegis.Cafeteria machine endpoint
+## Validation
 
-The browser console keeps its entered console key only in `sessionStorage` and sends it on API requests. Server-side comparisons use fixed-time comparison.
-
-## Local layout
-
-```text
-D:\Projects\
-  Aegis.Diagnostics\
-  Aegis.Cafeteria\
-  Aegis.Studio\
-  RequestPortal\
-  Common\
-    Common.Diagnostics\
-    Common.Security\
-    Common.Secrets\
-    Common.Messaging\
-    Common.Storage\
-```
-
-## Run
-
-```powershell
-dotnet restore
-dotnet run
-```
-
-Set the target URLs in `Diagnostics:Targets` and provision the four environment variables before production use.
+Before release, build and test Common.Diagnostics first, then Aegis.Diagnostics and each consuming application. End-to-end validation must prove machine authentication, history, target identity, Level 5 health, deeper application-owned diagnostics, no secret leakage, and continued application operation when either central UI is unavailable.

@@ -10,7 +10,7 @@ public sealed class RemoteDiagnosticCatalogTests
     [Fact]
     public async Task Level5UsesHealthEndpoint()
     {
-        CapturingHandler handler = new(request => { Assert.Equal(HttpMethod.Get, request.Method); Assert.Equal("https://studio.test/health", request.RequestUri!.ToString()); return new HttpResponseMessage(HttpStatusCode.OK); });
+        CapturingHandler handler = new((HttpRequestMessage request) => { Assert.Equal(HttpMethod.Get, request.Method); Assert.Equal("https://studio.test/health", request.RequestUri!.ToString()); return new HttpResponseMessage(HttpStatusCode.OK); });
         RemoteDiagnosticCatalog catalog = CreateCatalog(handler, false);
         EngineeringDiagnosticCheckDefinition check = catalog.Build(EngineeringDiagnosticLevel.Level5Scan, null).Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
         Assert.Equal(EngineeringDiagnosticStatus.Passed, (await check.RunAsync(CancellationToken.None)).Status);
@@ -29,7 +29,7 @@ public sealed class RemoteDiagnosticCatalogTests
     public async Task MissingRequiredCredentialReturnsWarningWithoutNetworkCall()
     {
         const string variable = "AEGIS_DIAGNOSTICS_TEST_MISSING_KEY"; Environment.SetEnvironmentVariable(variable, null);
-        CapturingHandler handler = new(_ => throw new InvalidOperationException("Network should not be called."));
+        CapturingHandler handler = new((HttpRequestMessage _) => throw new InvalidOperationException("Network should not be called."));
         RemoteDiagnosticCatalog catalog = CreateCatalog(handler, true, variable);
         EngineeringDiagnosticCheckDefinition check = catalog.Build(EngineeringDiagnosticLevel.Level3Verification, null).Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
         EngineeringDiagnosticCheckResult result = await check.RunAsync(CancellationToken.None);
@@ -39,7 +39,7 @@ public sealed class RemoteDiagnosticCatalogTests
     [Fact]
     public void CapabilitiesExposeConfigurationCompatibleIdentity()
     {
-        RemoteDiagnosticCatalog catalog = CreateCatalog(new CapturingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)), false);
+        RemoteDiagnosticCatalog catalog = CreateCatalog(new CapturingHandler((HttpRequestMessage _) => new HttpResponseMessage(HttpStatusCode.OK)), false);
         string json = System.Text.Json.JsonSerializer.Serialize(catalog.GetCapabilities());
         Assert.Contains("Aegis.Studio", json);
         Assert.Contains("FFP-JM", json);
@@ -52,7 +52,7 @@ public sealed class RemoteDiagnosticCatalogTests
     [InlineData(EngineeringDiagnosticStatus.InterventionRequired, EngineeringDiagnosticStatus.InterventionRequired)]
     public async Task RemoteOutcomePropagatesToAggregateStatus(EngineeringDiagnosticStatus remoteStatus, EngineeringDiagnosticStatus expected)
     {
-        CapturingHandler handler = new(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(CreateRemoteRun(remoteStatus)) });
+        CapturingHandler handler = new((HttpRequestMessage _) => new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(CreateRemoteRun(remoteStatus)) });
         EngineeringDiagnosticCheckDefinition check = CreateCatalog(handler, false).Build(EngineeringDiagnosticLevel.Level2Repair, "repair investigation").Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
         Assert.Equal(expected, (await check.RunAsync(CancellationToken.None)).Status);
     }

@@ -5,9 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <CommonRoot Condition="'$(CommonRoot)' == ''">$(MSBuildThisFileDirectory)..\Common</CommonRoot>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Aegis.Diagnostics.UnitTests\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="Aegis.Diagnostics.UnitTests\**\*.cs" />
+    <Content Remove="Aegis.Diagnostics.UnitTests\**\*" />
     <None Remove="Aegis.Diagnostics.UnitTests\**\*" />
   </ItemGroup>
   <ItemGroup>

@@ -29,7 +29,7 @@ public sealed class RemoteDiagnosticCatalogTests
     public async Task MissingRequiredCredentialReturnsWarningWithoutNetworkCall()
     {
         const string variable = "AEGIS_DIAGNOSTICS_TEST_MISSING_KEY"; Environment.SetEnvironmentVariable(variable, null);
-        CapturingHandler handler = new((HttpRequestMessage _) => throw new InvalidOperationException("Network should not be called."));
+        CapturingHandler handler = new((Func<HttpRequestMessage, HttpResponseMessage>)(_ => throw new InvalidOperationException("Network should not be called.")));
         RemoteDiagnosticCatalog catalog = CreateCatalog(handler, true, variable);
         EngineeringDiagnosticCheckDefinition check = catalog.Build(EngineeringDiagnosticLevel.Level3Verification, null).Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
         EngineeringDiagnosticCheckResult result = await check.RunAsync(CancellationToken.None);

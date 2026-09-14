@@ -3,36 +3,16 @@ using Common.Diagnostics;
 using Common.Secrets;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-
-DiagnosticsOptions diagnosticsOptions =
-    builder.Configuration.GetSection("Diagnostics").Get<DiagnosticsOptions>()
-    ?? new DiagnosticsOptions();
-
+DiagnosticsOptions diagnosticsOptions = builder.Configuration.GetSection("Diagnostics").Get<DiagnosticsOptions>() ?? new DiagnosticsOptions();
 builder.Services.AddSingleton(diagnosticsOptions);
-builder.Services.AddHttpClient("diagnostics-targets", client =>
-    client.Timeout = TimeSpan.FromSeconds(30));
-
+builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddCommonDiagnostics();
-
-if (builder.Configuration.GetSection("CommonSecrets").Exists())
-{
-    builder.Services.AddCommonSecrets(builder.Configuration);
-    builder.Services.AddCommonSecretsDiagnostics();
-    builder.Services.AddHostedService<ConfigurationContractPublisher>();
-}
-
+if (builder.Configuration.GetSection("CommonSecrets").Exists()){builder.Services.AddCommonSecrets(builder.Configuration);builder.Services.AddCommonSecretsDiagnostics();builder.Services.AddHostedService<ConfigurationContractPublisher>();}
 builder.Services.AddDiagnosticsMessaging(builder.Configuration);
-builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
-builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();
-builder.Services.AddSingleton<IncidentCorrelationService>();
-builder.Services.AddSingleton<IIncidentNotificationPublisher, CommonMessagingIncidentNotificationPublisher>();
-builder.Services.AddSingleton<DiagnosticOrchestrationService>();
-
+builder.Services.AddSingleton<RemoteDiagnosticCatalog>();builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();builder.Services.AddSingleton<IncidentCorrelationService>();builder.Services.AddSingleton<IIncidentNotificationPublisher, CommonMessagingIncidentNotificationPublisher>();builder.Services.AddSingleton<DiagnosticOrchestrationService>();builder.Services.AddSuiteSecurity();
 WebApplication app = builder.Build();
-
-app.UseDefaultFiles();
-app.UseStaticFiles();
-app.UseDiagnosticsApiAuthorization(diagnosticsOptions);
-app.MapDiagnosticsApi(diagnosticsOptions);
-
+app.MapSuiteSecurity();
+app.UseSuiteSecurity();
+app.UseDefaultFiles();app.UseStaticFiles();
+app.UseDiagnosticsApiAuthorization(diagnosticsOptions);app.MapDiagnosticsApi(diagnosticsOptions);
 app.Run();

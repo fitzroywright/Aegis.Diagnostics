@@ -9,7 +9,7 @@ internal static class DiagnosticsAuthorization
     {
         app.Use(async (context, next) =>
         {
-            if (!RequiresAuthorization(context, options))
+            if (!RequiresAuthorization(context))
             {
                 await next();
                 return;
@@ -26,12 +26,20 @@ internal static class DiagnosticsAuthorization
         });
     }
 
-    private static bool RequiresAuthorization(HttpContext context, DiagnosticsOptions options) =>
-        options.RequireApiKey && context.Request.Path.StartsWithSegments("/api");
+    private static bool RequiresAuthorization(HttpContext context) =>
+        context.Request.Path.StartsWithSegments("/api/engineering/diagnostics");
 
     private static async Task<bool> IsAuthorizedAsync(HttpContext context, DiagnosticsOptions options, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(options.MachineCredentialSecretName)) return false;
+        SuiteSecurity suiteSecurity = context.RequestServices.GetRequiredService<SuiteSecurity>();
+        SuiteIdentity? operatorIdentity = suiteSecurity.Read(context.Request);
+        if (operatorIdentity is not null)
+        {
+            context.Items["SuiteIdentity"] = operatorIdentity;
+            return true;
+        }
+
+        if (!options.RequireApiKey || string.IsNullOrWhiteSpace(options.MachineCredentialSecretName)) return false;
 
         ISecretProvider secrets = context.RequestServices.GetRequiredService<ISecretProvider>();
         string? expected;
@@ -40,8 +48,10 @@ internal static class DiagnosticsAuthorization
         catch { return false; }
 
         if (string.IsNullOrWhiteSpace(expected)) return false;
-        return context.Request.Headers.TryGetValue(options.ApiKeyHeader, out var supplied)
+        bool authorized = context.Request.Headers.TryGetValue(options.ApiKeyHeader, out var supplied)
             && FixedTimeEquals(expected, supplied.ToString());
+        if (authorized) context.Items["DiagnosticsMachineAuthorized"] = true;
+        return authorized;
     }
 
     private static bool FixedTimeEquals(string expected, string supplied)

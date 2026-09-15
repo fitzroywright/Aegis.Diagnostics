@@ -9,13 +9,13 @@ public sealed class RemoteDiagnosticCatalog
 {
     private readonly IHttpClientFactory httpClientFactory;
     private readonly DiagnosticsOptions options;
-    private readonly ConfigurationDiscoveryCatalog discovery;
+    private readonly IDiagnosticTargetCatalog discovery;
     private readonly IConfiguration configuration;
 
     public RemoteDiagnosticCatalog(
         IHttpClientFactory httpClientFactory,
         DiagnosticsOptions options,
-        ConfigurationDiscoveryCatalog discovery,
+        IDiagnosticTargetCatalog discovery,
         IConfiguration configuration)
     {
         this.httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
@@ -63,7 +63,9 @@ public sealed class RemoteDiagnosticCatalog
             target.HealthPath,
             target.DiagnosticsRunPath,
             target.DiagnosticsRunsPath,
+            target.TelemetryPath,
             target.SupportsRemoteDiagnostics,
+            target.SupportsOperationalTelemetry,
             target.AuthenticationScheme,
             CredentialSecretName = target.SecretName,
             target.SupportedLevels,

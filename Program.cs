@@ -12,6 +12,7 @@ builder.Services.AddCommonSecrets(builder.Configuration);
 builder.Services.AddCommonSecretsDiagnostics();
 builder.Services.AddHostedService<ConfigurationContractPublisher>();
 builder.Services.AddSingleton<ConfigurationDiscoveryCatalog>();
+builder.Services.AddSingleton<IDiagnosticTargetCatalog>(services => services.GetRequiredService<ConfigurationDiscoveryCatalog>());
 builder.Services.AddHostedService<ConfigurationDiscoveryWorker>();
 builder.Services.AddSingleton<ApplicationHealthStateStore>();
 builder.Services.AddHostedService<ApplicationHealthMonitor>();

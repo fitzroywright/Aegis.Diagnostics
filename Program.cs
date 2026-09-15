@@ -13,6 +13,8 @@ builder.Services.AddCommonSecretsDiagnostics();
 builder.Services.AddHostedService<ConfigurationContractPublisher>();
 builder.Services.AddSingleton<ConfigurationDiscoveryCatalog>();
 builder.Services.AddHostedService<ConfigurationDiscoveryWorker>();
+builder.Services.AddSingleton<ApplicationHealthStateStore>();
+builder.Services.AddHostedService<ApplicationHealthMonitor>();
 builder.Services.AddDiagnosticsMessaging(builder.Configuration);
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
 builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();

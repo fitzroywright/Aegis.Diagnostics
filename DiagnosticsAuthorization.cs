@@ -1,4 +1,5 @@
 using Aegis.Diagnostics;
+using Common.Secrets;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -14,10 +15,10 @@ internal static class DiagnosticsAuthorization
                 return;
             }
 
-            if (!IsAuthorized(context, options))
+            if (!await IsAuthorizedAsync(context, options, context.RequestAborted))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsync("Unauthorized");
+                await context.Response.WriteAsync("Unauthorized", context.RequestAborted);
                 return;
             }
 
@@ -28,12 +29,17 @@ internal static class DiagnosticsAuthorization
     private static bool RequiresAuthorization(HttpContext context, DiagnosticsOptions options) =>
         options.RequireApiKey && context.Request.Path.StartsWithSegments("/api");
 
-    private static bool IsAuthorized(HttpContext context, DiagnosticsOptions options)
+    private static async Task<bool> IsAuthorizedAsync(HttpContext context, DiagnosticsOptions options, CancellationToken cancellationToken)
     {
-        string? expected = Environment.GetEnvironmentVariable(options.ApiKeyEnvironmentVariable);
-        if (string.IsNullOrWhiteSpace(expected))
-            return false;
+        if (string.IsNullOrWhiteSpace(options.MachineCredentialSecretName)) return false;
 
+        ISecretProvider secrets = context.RequestServices.GetRequiredService<ISecretProvider>();
+        string? expected;
+        try { expected = await secrets.GetAsync(options.MachineCredentialSecretName, cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch { return false; }
+
+        if (string.IsNullOrWhiteSpace(expected)) return false;
         return context.Request.Headers.TryGetValue(options.ApiKeyHeader, out var supplied)
             && FixedTimeEquals(expected, supplied.ToString());
     }

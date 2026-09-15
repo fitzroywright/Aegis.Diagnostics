@@ -86,9 +86,22 @@ public sealed class RemoteDiagnosticCatalog
 
         if (options.RequireApiKey)
         {
-            if (string.IsNullOrWhiteSpace(options.ApiKeyHeader)) failures.Add("API-key authentication is enabled but ApiKeyHeader is not configured.");
-            if (string.IsNullOrWhiteSpace(options.ApiKeyEnvironmentVariable)) failures.Add("API-key authentication is enabled but ApiKeyEnvironmentVariable is not configured.");
-            else if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(options.ApiKeyEnvironmentVariable))) warnings.Add($"API-key environment variable {options.ApiKeyEnvironmentVariable} is not currently available.");
+            if (string.IsNullOrWhiteSpace(options.ApiKeyHeader)) failures.Add("Machine authentication is enabled but ApiKeyHeader is not configured.");
+            if (string.IsNullOrWhiteSpace(options.MachineCredentialSecretName)) failures.Add("Machine authentication is enabled but MachineCredentialSecretName is not configured.");
+            else
+            {
+                try
+                {
+                    ISecretProvider secrets = CommonSecretProviderFactory.Create(configuration);
+                    string? machineCredential = await secrets.GetAsync(options.MachineCredentialSecretName, cancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrWhiteSpace(machineCredential)) warnings.Add($"Machine credential secret '{options.MachineCredentialSecretName}' is not currently resolvable.");
+                    else evidence.Add("Diagnostics machine credential resolves through Common.Secrets; value not displayed.");
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                    warnings.Add($"Machine credential verification failed through Common.Secrets ({exception.GetType().Name}).");
+                }
+            }
         }
 
         if (discovery.LastSuccessfulRefreshUtc is null)

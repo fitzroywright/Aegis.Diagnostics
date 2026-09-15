@@ -50,9 +50,9 @@ public sealed class ConfigurationContractPublisher(
 
             if (contract["requirements"] is JsonArray requirements)
             {
-                await UpdateRequirementAsync(requirements, "public-url", "Aegis:PublicUrl", null, cancellationToken);
-                await UpdateRequirementAsync(requirements, "configuration-url", "Aegis:Configuration:Url", null, cancellationToken);
-                await UpdateRequirementAsync(requirements, "run-store", "Diagnostics:RunStorePath", "data/engineering-diagnostic-runs.json", cancellationToken);
+                UpdateRequirement(requirements, "public-url", "Aegis:PublicUrl", null, cancellationToken);
+                UpdateRequirement(requirements, "configuration-url", "Aegis:Configuration:Url", null, cancellationToken);
+                UpdateRequirement(requirements, "run-store", "Diagnostics:RunStorePath", "data/engineering-diagnostic-runs.json", cancellationToken);
                 await UpdateSecretRequirementAsync(requirements, "configuration-registration-key", registrationSecretPath, cancellationToken);
                 await UpdateSecretRequirementAsync(requirements, "diagnostics-machine-credential", options.MachineCredentialSecretName, cancellationToken);
                 AddSecretManagerMetadata(requirements);
@@ -71,7 +71,7 @@ public sealed class ConfigurationContractPublisher(
         catch (Exception ex) { logger.LogWarning(ex, "Unable to publish Diagnostics configuration state; Diagnostics remains operational."); return false; }
     }
 
-    private async Task UpdateRequirementAsync(JsonArray requirements, string id, string key, string? codeDefault, CancellationToken cancellationToken)
+    private void UpdateRequirement(JsonArray requirements, string id, string key, string? codeDefault, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         JsonObject? requirement = Find(requirements, id);
@@ -132,7 +132,8 @@ public sealed class ConfigurationContractPublisher(
 
     private static void UpsertMetadata(JsonArray requirements, string id, string displayName, string key, string? value)
     {
-        JsonObject requirement = Find(requirements, id) ?? new JsonObject
+        JsonObject? existing = Find(requirements, id);
+        JsonObject requirement = existing ?? new JsonObject
         {
             ["id"] = id,
             ["displayName"] = displayName,
@@ -142,7 +143,7 @@ public sealed class ConfigurationContractPublisher(
             ["configurationKey"] = key,
             ["sensitive"] = false
         };
-        if (!requirements.Contains(requirement)) requirements.Add(requirement);
+        if (existing is null) requirements.Add(requirement);
         bool configured = !string.IsNullOrWhiteSpace(value);
         requirement["isConfigured"] = configured;
         requirement["effectiveValueAvailable"] = configured;

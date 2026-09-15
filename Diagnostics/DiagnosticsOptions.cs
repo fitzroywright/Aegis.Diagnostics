@@ -9,7 +9,7 @@ public sealed class DiagnosticsOptions
     public string EnvironmentName { get; init; } = "Production";
     public bool RequireApiKey { get; init; } = true;
     public string ApiKeyHeader { get; init; } = "X-Aegis-Diagnostics-Key";
-    public string ApiKeyEnvironmentVariable { get; init; } = "AEGIS_DIAGNOSTICS_KEY";
+    public string MachineCredentialSecretName { get; init; } = "diagnostics/machine/Aegis.Diagnostics";
     public string RunStorePath { get; init; } = "data/engineering-diagnostic-runs.json";
     public int DiscoveryRefreshSeconds { get; init; } = 60;
     public int ObservationStaleSeconds { get; init; } = 180;

@@ -1,6 +1,7 @@
 namespace Aegis.Diagnostics;
 
 using Common.Diagnostics;
+using Common.Secrets;
 using System.Diagnostics;
 using System.Net.Http.Json;
 
@@ -8,24 +9,36 @@ public sealed class RemoteDiagnosticCatalog
 {
     private readonly IHttpClientFactory httpClientFactory;
     private readonly DiagnosticsOptions options;
+    private readonly ConfigurationDiscoveryCatalog discovery;
+    private readonly IConfiguration configuration;
 
-    public RemoteDiagnosticCatalog(IHttpClientFactory httpClientFactory, DiagnosticsOptions options)
+    public RemoteDiagnosticCatalog(
+        IHttpClientFactory httpClientFactory,
+        DiagnosticsOptions options,
+        ConfigurationDiscoveryCatalog discovery,
+        IConfiguration configuration)
     {
         this.httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         this.options = options ?? throw new ArgumentNullException(nameof(options));
+        this.discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
+        this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
     public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(EngineeringDiagnosticLevel requestedLevel, string? reason)
     {
-        List<EngineeringDiagnosticCheckDefinition> checks = [];
-        checks.Add(new EngineeringDiagnosticCheckDefinition(
-            "aegis-diagnostics-self",
-            "Aegis.Diagnostics self health",
-            EngineeringDiagnosticLevel.Level5Scan,
-            ExecuteSelfHealthAsync));
+        List<EngineeringDiagnosticCheckDefinition> checks =
+        [
+            new EngineeringDiagnosticCheckDefinition(
+                "aegis-diagnostics-self",
+                "Aegis.Diagnostics self health",
+                EngineeringDiagnosticLevel.Level5Scan,
+                ExecuteSelfHealthAsync)
+        ];
 
-        foreach (DiagnosticTargetOptions target in options.Targets)
+        foreach (DiagnosticTargetOptions target in discovery.Targets)
         {
+            if (!target.SupportsRemoteDiagnostics) continue;
+            if (!target.SupportedLevels.Contains((int)requestedLevel)) continue;
             string identity = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
             string id = $"{identity}-level-{(int)requestedLevel}".ToLowerInvariant().Replace('.', '-');
             checks.Add(new EngineeringDiagnosticCheckDefinition(id, $"{target.Name} — Level {(int)requestedLevel}", requestedLevel, cancellationToken => ExecuteRemoteAsync(id, target, requestedLevel, reason, cancellationToken)));
@@ -33,13 +46,30 @@ public sealed class RemoteDiagnosticCatalog
         return checks;
     }
 
-    public object GetCapabilities() => options.Targets.Select(target => new
+    public object GetCapabilities() => new
     {
-        target.ApplicationId, target.Name, target.SiteId, target.InstanceId, target.ApplicationType, target.BaseUrl,
-        Protocol = "Common.Diagnostics Engineering Diagnostics v1", target.HealthPath, target.DiagnosticsRunPath,
-        target.DiagnosticsRunsPath, target.RequireMachineCredential, target.ApiKeyHeader,
-        CredentialAvailable = !target.RequireMachineCredential || HasCredential(target)
-    }).ToArray();
+        InventorySource = "Aegis.Configuration",
+        DiscoveryLastSuccessfulUtc = discovery.LastSuccessfulRefreshUtc,
+        DiscoveryStale = discovery.IsStale,
+        DiscoveryError = discovery.LastError,
+        Targets = discovery.Targets.Select(target => new
+        {
+            target.ApplicationId,
+            target.Name,
+            target.SiteId,
+            target.InstanceId,
+            target.BaseUrl,
+            Protocol = "Common.Diagnostics Engineering Diagnostics v1",
+            target.HealthPath,
+            target.DiagnosticsRunPath,
+            target.DiagnosticsRunsPath,
+            target.SupportsRemoteDiagnostics,
+            target.AuthenticationScheme,
+            CredentialSecretName = target.SecretName,
+            target.SupportedLevels,
+            target.ConfigurationRegisteredAtUtc
+        }).ToArray()
+    };
 
     private async Task<EngineeringDiagnosticCheckResult> ExecuteSelfHealthAsync(CancellationToken cancellationToken)
     {
@@ -61,14 +91,18 @@ public sealed class RemoteDiagnosticCatalog
             else if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(options.ApiKeyEnvironmentVariable))) warnings.Add($"API-key environment variable {options.ApiKeyEnvironmentVariable} is not currently available.");
         }
 
-        foreach (DiagnosticTargetOptions target in options.Targets)
+        if (discovery.LastSuccessfulRefreshUtc is null)
+            warnings.Add(discovery.LastError ?? "Aegis.Configuration discovery has not completed successfully yet.");
+        else if (discovery.IsStale)
+            warnings.Add($"Aegis.Configuration discovery is stale; last successful refresh was {discovery.LastSuccessfulRefreshUtc:O}.");
+
+        foreach (DiagnosticTargetOptions target in discovery.Targets)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string targetName = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
-            if (string.IsNullOrWhiteSpace(target.ApplicationId)) warnings.Add($"Target '{target.Name}' has no ApplicationId.");
-            if (string.IsNullOrWhiteSpace(target.Name)) warnings.Add($"Target '{targetName}' has no display name.");
-            if (!string.IsNullOrWhiteSpace(target.BaseUrl) && !Uri.TryCreate(target.BaseUrl, UriKind.Absolute, out _)) failures.Add($"Target '{targetName}' has an invalid BaseUrl.");
-            if (target.RequireMachineCredential && string.IsNullOrWhiteSpace(target.ApiKeyEnvironmentVariable)) warnings.Add($"Target '{targetName}' requires a machine credential but no credential environment variable is configured.");
+            if (string.IsNullOrWhiteSpace(target.ApplicationId)) warnings.Add($"Discovered target '{target.Name}' has no ApplicationId.");
+            if (string.IsNullOrWhiteSpace(target.BaseUrl)) warnings.Add($"Discovered target '{target.ApplicationId}' has no resolved public URL.");
+            else if (!Uri.TryCreate(target.BaseUrl, UriKind.Absolute, out _)) failures.Add($"Discovered target '{target.ApplicationId}' has an invalid public URL.");
+            if (target.SupportsRemoteDiagnostics && string.IsNullOrWhiteSpace(target.SecretName)) warnings.Add($"Discovered target '{target.ApplicationId}' supports remote diagnostics but publishes no machine-credential secret name.");
         }
 
         if (!string.IsNullOrWhiteSpace(options.RunStorePath))
@@ -77,10 +111,7 @@ public sealed class RemoteDiagnosticCatalog
             {
                 string fullPath = Path.GetFullPath(options.RunStorePath);
                 string? directory = Path.GetDirectoryName(fullPath);
-                if (string.IsNullOrWhiteSpace(directory))
-                {
-                    failures.Add("Run-store directory could not be resolved.");
-                }
+                if (string.IsNullOrWhiteSpace(directory)) failures.Add("Run-store directory could not be resolved.");
                 else
                 {
                     Directory.CreateDirectory(directory);
@@ -96,38 +127,40 @@ public sealed class RemoteDiagnosticCatalog
             }
         }
 
-        evidence.Add($"Target catalog loaded: {options.Targets.Count} target(s)");
+        evidence.Add($"Configuration discovery catalog loaded: {discovery.Targets.Count} diagnostic-capable application(s).");
         evidence.Add("Common.Diagnostics executed this self-check through the engineering diagnostic pipeline.");
         stopwatch.Stop();
 
         if (failures.Count > 0)
-        {
-            string summary = $"Aegis.Diagnostics self-check failed with {failures.Count} problem(s).";
-            string detail = string.Join(" ", failures.Concat(warnings).Concat(evidence)) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.";
-            return new EngineeringDiagnosticCheckResult(id, name, EngineeringDiagnosticStatus.Failed, summary, detail);
-        }
+            return new(id, name, EngineeringDiagnosticStatus.Failed, $"Aegis.Diagnostics self-check failed with {failures.Count} problem(s).", string.Join(" ", failures.Concat(warnings).Concat(evidence)) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.");
 
         if (warnings.Count > 0)
-        {
-            string summary = $"Aegis.Diagnostics self-check completed with {warnings.Count} warning(s).";
-            string detail = string.Join(" ", warnings.Concat(evidence)) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.";
-            return new EngineeringDiagnosticCheckResult(id, name, EngineeringDiagnosticStatus.Warning, summary, detail);
-        }
+            return new(id, name, EngineeringDiagnosticStatus.Warning, $"Aegis.Diagnostics self-check completed with {warnings.Count} warning(s).", string.Join(" ", warnings.Concat(evidence)) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.");
 
-        return new EngineeringDiagnosticCheckResult(
-            id,
-            name,
-            EngineeringDiagnosticStatus.Passed,
-            "Aegis.Diagnostics self-check passed.",
-            string.Join(" ", evidence) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.");
+        return new(id, name, EngineeringDiagnosticStatus.Passed, "Aegis.Diagnostics self-check passed.", string.Join(" ", evidence) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.");
     }
 
     private async Task<EngineeringDiagnosticCheckResult> ExecuteRemoteAsync(string id, DiagnosticTargetOptions target, EngineeringDiagnosticLevel level, string? reason, CancellationToken cancellationToken)
     {
         string displayName = $"{target.Name} — Level {(int)level}";
-        if (!Uri.TryCreate(target.BaseUrl, UriKind.Absolute, out Uri? baseUri)) return Warning(id, displayName, "Target URL is not configured correctly.", target.BaseUrl);
-        string? credential = GetCredential(target);
-        if (target.RequireMachineCredential && string.IsNullOrWhiteSpace(credential)) return Warning(id, displayName, "Machine authentication credential is not available.", $"Configure environment variable {target.ApiKeyEnvironmentVariable ?? "<not configured>"}.");
+        if (!Uri.TryCreate(target.BaseUrl, UriKind.Absolute, out Uri? baseUri)) return Warning(id, displayName, "Application public URL is unresolved in Configuration.", target.ApplicationId);
+
+        string? credential = null;
+        if (string.Equals(target.AuthenticationScheme, "MachineCredential", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(target.SecretName)) return Warning(id, displayName, "Machine credential secret name is not published by the application.");
+            try
+            {
+                ISecretProvider secrets = CommonSecretProviderFactory.Create(configuration);
+                credential = await secrets.GetAsync(target.SecretName, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                return Warning(id, displayName, "Machine authentication credential could not be resolved through Common.Secrets.", exception.GetType().Name);
+            }
+            if (string.IsNullOrWhiteSpace(credential)) return Warning(id, displayName, "Machine authentication credential is unavailable through Common.Secrets.", target.SecretName);
+        }
+
         HttpClient client = httpClientFactory.CreateClient("diagnostics-targets");
         Stopwatch stopwatch = Stopwatch.StartNew();
         try
@@ -136,15 +169,16 @@ public sealed class RemoteDiagnosticCatalog
             {
                 Uri healthUri = new(baseUri, target.HealthPath);
                 using HttpRequestMessage healthRequest = new(HttpMethod.Get, healthUri);
-                AddCredential(healthRequest, target, credential);
+                AddCredential(healthRequest, credential);
                 using HttpResponseMessage healthResponse = await client.SendAsync(healthRequest, cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
                 string evidence = $"HTTP {(int)healthResponse.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {healthUri}";
                 return healthResponse.IsSuccessStatusCode ? new(id, displayName, EngineeringDiagnosticStatus.Passed, "Application-reported quick health is reachable.", evidence) : new(id, displayName, EngineeringDiagnosticStatus.Failed, "Application health endpoint reported failure.", evidence);
             }
+
             Uri runUri = new(baseUri, target.DiagnosticsRunPath);
             using HttpRequestMessage runRequest = new(HttpMethod.Post, runUri) { Content = JsonContent.Create(new EngineeringDiagnosticRunRequest(level, reason)) };
-            AddCredential(runRequest, target, credential);
+            AddCredential(runRequest, credential);
             using HttpResponseMessage runResponse = await client.SendAsync(runRequest, cancellationToken).ConfigureAwait(false);
             stopwatch.Stop();
             if (!runResponse.IsSuccessStatusCode) return new(id, displayName, EngineeringDiagnosticStatus.Failed, "Application diagnostics endpoint returned an unsuccessful status.", $"HTTP {(int)runResponse.StatusCode} in {stopwatch.ElapsedMilliseconds} ms — {runUri}");
@@ -160,7 +194,5 @@ public sealed class RemoteDiagnosticCatalog
     }
 
     private static EngineeringDiagnosticCheckResult Warning(string id, string name, string summary, string? evidence = null) => new(id, name, EngineeringDiagnosticStatus.Warning, summary, evidence);
-    private static bool HasCredential(DiagnosticTargetOptions target) => !string.IsNullOrWhiteSpace(GetCredential(target));
-    private static string? GetCredential(DiagnosticTargetOptions target) => string.IsNullOrWhiteSpace(target.ApiKeyEnvironmentVariable) ? null : Environment.GetEnvironmentVariable(target.ApiKeyEnvironmentVariable);
-    private static void AddCredential(HttpRequestMessage request, DiagnosticTargetOptions target, string? credential) { if (!string.IsNullOrWhiteSpace(credential)) request.Headers.TryAddWithoutValidation(target.ApiKeyHeader, credential); }
+    private static void AddCredential(HttpRequestMessage request, string? credential) { if (!string.IsNullOrWhiteSpace(credential)) request.Headers.TryAddWithoutValidation("X-Aegis-Diagnostics-Key", credential); }
 }

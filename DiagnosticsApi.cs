@@ -27,15 +27,10 @@ internal static class DiagnosticsApi
             });
         });
 
-        app.MapGet("/api/engineering/diagnostics/targets", (HttpContext c, ConfigurationDiscoveryCatalog discovery) =>
-            View(c) ? Results.Ok(new
-            {
-                source = "Aegis.Configuration",
-                lastSuccessfulRefreshUtc = discovery.LastSuccessfulRefreshUtc,
-                stale = discovery.IsStale,
-                error = discovery.LastError,
-                targets = discovery.Targets
-            }) : Results.Forbid());
+        // Preserve the existing array response shape for the current Diagnostics UI. Inventory metadata
+        // is exposed by /capabilities and health, while the target identities themselves come from Configuration.
+        app.MapGet("/api/engineering/diagnostics/targets", (HttpContext c, IDiagnosticTargetCatalog discovery) =>
+            View(c) ? Results.Ok(discovery.Targets) : Results.Forbid());
 
         app.MapGet("/api/engineering/diagnostics/status", (HttpContext c, ApplicationHealthStateStore health) =>
             View(c) ? Results.Ok(new { source = "Aegis.Diagnostics", observations = health.GetAll() }) : Results.Forbid());

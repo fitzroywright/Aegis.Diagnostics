@@ -2,13 +2,66 @@
   "applicationId": "Aegis.Diagnostics",
   "displayName": "Aegis Diagnostics",
   "version": "1.0.0",
-  "description": "Operator-facing aggregation, history and engineering diagnostics console.",
+  "description": "Operator-facing operational health, history, incident correlation and engineering diagnostics console.",
+  "diagnostics": {
+    "baseUrlConfigurationKey": "Aegis:PublicUrl",
+    "healthPath": "/health",
+    "diagnosticsRunPath": "/api/engineering/diagnostics/run",
+    "diagnosticsRunsPath": "/api/engineering/diagnostics/runs",
+    "supportsRemoteDiagnostics": true,
+    "authenticationScheme": "MachineCredential",
+    "secretName": "diagnostics/machine/Aegis.Diagnostics",
+    "supportedLevels": [ 1, 2, 3, 4, 5 ]
+  },
   "requirements": [
-    { "id": "diagnostics-key", "displayName": "Diagnostics operator machine credential", "kind": "Secret", "required": true, "purpose": "Protects the diagnostics operator and orchestration surface.", "secretName": "Aegis:Diagnostics:Key", "isConfigured": false, "sensitive": true },
-    { "id": "run-store", "displayName": "Diagnostic run history store", "kind": "Configuration", "required": true, "purpose": "Defines durable storage for engineering diagnostic run history.", "configurationKey": "Diagnostics:RunStorePath", "isConfigured": false },
-    { "id": "requestportal-target", "displayName": "Request Portal diagnostics endpoint", "kind": "ExternalService", "required": true, "purpose": "Address used to request application-authoritative diagnostics from Request Portal.", "configurationKey": "Diagnostics:Targets:0:BaseUrl", "isConfigured": false },
-    { "id": "studio-target", "displayName": "Studio diagnostics endpoint", "kind": "ExternalService", "required": true, "purpose": "Address used to request application-authoritative diagnostics from Studio.", "configurationKey": "Diagnostics:Targets:1:BaseUrl", "isConfigured": false },
-    { "id": "cafeteria-target", "displayName": "Cafeteria Services diagnostics endpoint", "kind": "ExternalService", "required": true, "purpose": "Address used to request application-authoritative diagnostics from Cafeteria Services.", "configurationKey": "Diagnostics:Targets:2:BaseUrl", "isConfigured": false },
-    { "id": "sensornetwork-target", "displayName": "SensorNetwork Control Plane diagnostics endpoint", "kind": "ExternalService", "required": true, "purpose": "Address used to request application-authoritative diagnostics from SensorNetwork Control Plane.", "configurationKey": "Diagnostics:Targets:3:BaseUrl", "isConfigured": false }
+    {
+      "id": "public-url",
+      "displayName": "Public Service URL",
+      "kind": "Configuration",
+      "required": true,
+      "purpose": "Canonical URL used by other Aegis services to reach Aegis.Diagnostics.",
+      "configurationKey": "Aegis:PublicUrl",
+      "isConfigured": false
+    },
+    {
+      "id": "configuration-url",
+      "displayName": "System Configuration URL",
+      "kind": "ExternalService",
+      "required": true,
+      "purpose": "Inventory and deployment-truth source used by Aegis.Diagnostics.",
+      "configurationKey": "Aegis:Configuration:Url",
+      "isConfigured": false
+    },
+    {
+      "id": "configuration-registration-key",
+      "displayName": "Configuration Registration Credential",
+      "kind": "Secret",
+      "required": true,
+      "purpose": "Authenticates Diagnostics contract publication and Configuration discovery.",
+      "secretName": "configuration/registration/Aegis.Diagnostics",
+      "isConfigured": false,
+      "sensitive": true
+    },
+    {
+      "id": "diagnostics-machine-credential",
+      "displayName": "Diagnostics Machine Credential",
+      "kind": "Secret",
+      "required": true,
+      "purpose": "Protects authenticated machine-to-machine diagnostic calls to Aegis.Diagnostics.",
+      "secretName": "diagnostics/machine/Aegis.Diagnostics",
+      "isConfigured": false,
+      "sensitive": true
+    },
+    {
+      "id": "run-store",
+      "displayName": "Diagnostic Run History Store",
+      "kind": "Configuration",
+      "required": true,
+      "purpose": "Defines durable storage for engineering diagnostic run history.",
+      "configurationKey": "Diagnostics:RunStorePath",
+      "isConfigured": false,
+      "hasDefault": true,
+      "defaultValue": "data/engineering-diagnostic-runs.json"
+    }
   ]
 }

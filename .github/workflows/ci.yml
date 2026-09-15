@@ -30,6 +30,12 @@ jobs:
           repository: fitzroywright/Common.Secrets
           path: Common/Common.Secrets
 
+      - name: Checkout Common.Security
+        uses: actions/checkout@v4
+        with:
+          repository: fitzroywright/Common.Security
+          path: Common/Common.Security
+
       - name: Move Common to sibling layout
         shell: pwsh
         run: |

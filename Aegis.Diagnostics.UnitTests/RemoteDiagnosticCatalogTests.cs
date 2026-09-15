@@ -1,6 +1,7 @@
 namespace Aegis.Diagnostics.UnitTests;
 
 using Common.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using System.Net;
 using System.Net.Http.Json;
 using Xunit;
@@ -28,12 +29,26 @@ public sealed class RemoteDiagnosticCatalogTests
     [Fact]
     public async Task MissingRequiredCredentialReturnsWarningWithoutNetworkCall()
     {
-        const string variable = "AEGIS_DIAGNOSTICS_TEST_MISSING_KEY"; Environment.SetEnvironmentVariable(variable, null);
         CapturingHandler handler = new((Func<HttpRequestMessage, HttpResponseMessage>)(_ => throw new InvalidOperationException("Network should not be called.")));
-        RemoteDiagnosticCatalog catalog = CreateCatalog(handler, true, variable);
+        RemoteDiagnosticCatalog catalog = CreateCatalog(handler, true, includeCredential: false);
         EngineeringDiagnosticCheckDefinition check = catalog.Build(EngineeringDiagnosticLevel.Level3Verification, null).Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
         EngineeringDiagnosticCheckResult result = await check.RunAsync(CancellationToken.None);
-        Assert.Equal(EngineeringDiagnosticStatus.Warning, result.Status); Assert.Contains("credential", result.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(EngineeringDiagnosticStatus.Warning, result.Status);
+        Assert.Contains("credential", result.Summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task MachineCredentialComesFromCommonSecrets()
+    {
+        CapturingHandler handler = new(request =>
+        {
+            Assert.True(request.Headers.TryGetValues("X-Aegis-Diagnostics-Key", out IEnumerable<string>? values));
+            Assert.Equal("test-machine-key", Assert.Single(values));
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(CreateRemoteRun(EngineeringDiagnosticStatus.Passed)) };
+        });
+        RemoteDiagnosticCatalog catalog = CreateCatalog(handler, true, includeCredential: true);
+        EngineeringDiagnosticCheckDefinition check = catalog.Build(EngineeringDiagnosticLevel.Level4Analysis, "credential test").Single(item => item.CheckId.StartsWith("aegis-studio", StringComparison.Ordinal));
+        Assert.Equal(EngineeringDiagnosticStatus.Passed, (await check.RunAsync(CancellationToken.None)).Status);
     }
 
     [Fact]
@@ -41,6 +56,7 @@ public sealed class RemoteDiagnosticCatalogTests
     {
         RemoteDiagnosticCatalog catalog = CreateCatalog(new CapturingHandler((HttpRequestMessage _) => new HttpResponseMessage(HttpStatusCode.OK)), false);
         string json = System.Text.Json.JsonSerializer.Serialize(catalog.GetCapabilities());
+        Assert.Contains("Aegis.Configuration", json);
         Assert.Contains("Aegis.Studio", json);
         Assert.Contains("FFP-JM", json);
         Assert.Contains("STUDIO-01", json);
@@ -57,12 +73,50 @@ public sealed class RemoteDiagnosticCatalogTests
         Assert.Equal(expected, (await check.RunAsync(CancellationToken.None)).Status);
     }
 
-    private static RemoteDiagnosticCatalog CreateCatalog(HttpMessageHandler handler, bool requireCredential, string? environmentVariable = null)
+    private static RemoteDiagnosticCatalog CreateCatalog(HttpMessageHandler handler, bool requireCredential, bool includeCredential = false)
     {
-        DiagnosticsOptions options = new() { Targets = [new DiagnosticTargetOptions { ApplicationId="Aegis.Studio", Name="Aegis Studio", SiteId="FFP-JM", InstanceId="STUDIO-01", BaseUrl="https://studio.test", RequireMachineCredential=requireCredential, ApiKeyEnvironmentVariable=environmentVariable }] };
-        return new RemoteDiagnosticCatalog(new TestHttpClientFactory(handler), options);
+        const string secretName = "diagnostics/machine/Aegis.Studio";
+        Dictionary<string, string?> values = new()
+        {
+            ["CommonSecrets:Mode"] = "Test",
+            ["CommonSecrets:ProviderOrder:0"] = "Configuration"
+        };
+        if (includeCredential) values[secretName] = "test-machine-key";
+        IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+        DiagnosticsOptions options = new() { RequireApiKey = false };
+        DiagnosticTargetOptions target = new(
+            "Aegis.Studio",
+            "Aegis Studio",
+            "FFP-JM",
+            "STUDIO-01",
+            "https://studio.test",
+            "/health",
+            "/api/engineering/diagnostics/run",
+            "/api/engineering/diagnostics/runs",
+            "/api/engineering/diagnostics/telemetry",
+            true,
+            true,
+            requireCredential ? "MachineCredential" : "None",
+            requireCredential ? secretName : string.Empty,
+            [1, 2, 3, 4, 5],
+            DateTimeOffset.UtcNow);
+        return new RemoteDiagnosticCatalog(new TestHttpClientFactory(handler), options, new TestTargetCatalog([target]), configuration);
     }
-    private static EngineeringDiagnosticRun CreateRemoteRun(EngineeringDiagnosticStatus status) { DateTimeOffset now=DateTimeOffset.UtcNow; return new EngineeringDiagnosticRun(Guid.NewGuid(),EngineeringDiagnosticLevel.Level4Analysis,"Aegis.Studio","Test","tests",null,now,now,status,[new EngineeringDiagnosticCheckResult("check","Check",status,"Result")]); }
+
+    private static EngineeringDiagnosticRun CreateRemoteRun(EngineeringDiagnosticStatus status)
+    {
+        DateTimeOffset now=DateTimeOffset.UtcNow;
+        return new EngineeringDiagnosticRun(Guid.NewGuid(),EngineeringDiagnosticLevel.Level4Analysis,"Aegis.Studio","Test","tests",null,now,now,status,[new EngineeringDiagnosticCheckResult("check","Check",status,"Result")]);
+    }
+
+    private sealed class TestTargetCatalog(IReadOnlyList<DiagnosticTargetOptions> targets) : IDiagnosticTargetCatalog
+    {
+        public IReadOnlyList<DiagnosticTargetOptions> Targets { get; } = targets;
+        public DateTimeOffset? LastSuccessfulRefreshUtc { get; } = DateTimeOffset.UtcNow;
+        public string? LastError => null;
+        public bool IsStale => false;
+    }
+
     private sealed class TestHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory { public HttpClient CreateClient(string name)=>new(handler,false); }
     private sealed class CapturingHandler : HttpMessageHandler { private readonly Func<HttpRequestMessage,Task<HttpResponseMessage>> responder; public CapturingHandler(Func<HttpRequestMessage,HttpResponseMessage> responder):this(r=>Task.FromResult(responder(r))){} public CapturingHandler(Func<HttpRequestMessage,Task<HttpResponseMessage>> responder){this.responder=responder;} protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellationToken)=>responder(request); }
 }

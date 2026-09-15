@@ -1,14 +1,21 @@
 namespace Aegis.Diagnostics;
 
 using System.Net.Http.Json;
-using System.Text.Json.Serialization;
 using Common.Secrets;
+
+public interface IDiagnosticTargetCatalog
+{
+    IReadOnlyList<DiagnosticTargetOptions> Targets { get; }
+    DateTimeOffset? LastSuccessfulRefreshUtc { get; }
+    string? LastError { get; }
+    bool IsStale { get; }
+}
 
 public sealed class ConfigurationDiscoveryCatalog(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     DiagnosticsOptions options,
-    ILogger<ConfigurationDiscoveryCatalog> logger)
+    ILogger<ConfigurationDiscoveryCatalog> logger) : IDiagnosticTargetCatalog
 {
     private readonly object gate = new();
     private DiagnosticTargetOptions[] targets = [];
@@ -92,7 +99,7 @@ public sealed class ConfigurationDiscoveryCatalog(
         }
     }
 
-    private DiagnosticTargetOptions ToTarget(ConfigurationApplicationContract contract)
+    private static DiagnosticTargetOptions ToTarget(ConfigurationApplicationContract contract)
     {
         ConfigurationDiagnosticsCapability capability = contract.Diagnostics!;
         string baseUrl = ResolveBaseUrl(contract, capability.BaseUrlConfigurationKey);
@@ -105,7 +112,9 @@ public sealed class ConfigurationDiscoveryCatalog(
             DefaultPath(capability.HealthPath, "/health"),
             DefaultPath(capability.DiagnosticsRunPath, "/api/engineering/diagnostics/run"),
             DefaultPath(capability.DiagnosticsRunsPath, "/api/engineering/diagnostics/runs"),
+            DefaultPath(capability.TelemetryPath, "/api/engineering/diagnostics/telemetry"),
             capability.SupportsRemoteDiagnostics,
+            capability.SupportsOperationalTelemetry,
             string.IsNullOrWhiteSpace(capability.AuthenticationScheme) ? "MachineCredential" : capability.AuthenticationScheme,
             capability.SecretName ?? string.Empty,
             capability.SupportedLevels is { Length: > 0 } ? capability.SupportedLevels : [1, 2, 3, 4, 5],
@@ -148,10 +157,12 @@ public sealed class ConfigurationDiscoveryCatalog(
         string? HealthPath,
         string? DiagnosticsRunPath,
         string? DiagnosticsRunsPath,
-        bool SupportsRemoteDiagnostics,
-        string? AuthenticationScheme,
-        string? SecretName,
-        int[]? SupportedLevels);
+        string? TelemetryPath,
+        bool SupportsRemoteDiagnostics = true,
+        bool SupportsOperationalTelemetry = true,
+        string? AuthenticationScheme = null,
+        string? SecretName = null,
+        int[]? SupportedLevels = null);
 }
 
 public sealed class ConfigurationDiscoveryWorker(ConfigurationDiscoveryCatalog catalog, DiagnosticsOptions options) : BackgroundService

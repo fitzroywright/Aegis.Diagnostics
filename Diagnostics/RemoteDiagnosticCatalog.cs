@@ -18,7 +18,12 @@ public sealed class RemoteDiagnosticCatalog
     public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(EngineeringDiagnosticLevel requestedLevel, string? reason)
     {
         List<EngineeringDiagnosticCheckDefinition> checks = [];
-        checks.Add(new EngineeringDiagnosticCheckDefinition("aegis-diagnostics-self", "Aegis.Diagnostics self health", EngineeringDiagnosticLevel.Level5Scan, _ => Task.FromResult(new EngineeringDiagnosticCheckResult("aegis-diagnostics-self", "Aegis.Diagnostics self health", EngineeringDiagnosticStatus.Passed, "Diagnostics console and Common.Diagnostics engine are running."))));
+        checks.Add(new EngineeringDiagnosticCheckDefinition(
+            "aegis-diagnostics-self",
+            "Aegis.Diagnostics self health",
+            EngineeringDiagnosticLevel.Level5Scan,
+            ExecuteSelfHealthAsync));
+
         foreach (DiagnosticTargetOptions target in options.Targets)
         {
             string identity = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
@@ -35,6 +40,87 @@ public sealed class RemoteDiagnosticCatalog
         target.DiagnosticsRunsPath, target.RequireMachineCredential, target.ApiKeyHeader,
         CredentialAvailable = !target.RequireMachineCredential || HasCredential(target)
     }).ToArray();
+
+    private async Task<EngineeringDiagnosticCheckResult> ExecuteSelfHealthAsync(CancellationToken cancellationToken)
+    {
+        const string id = "aegis-diagnostics-self";
+        const string name = "Aegis.Diagnostics self health";
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        List<string> failures = [];
+        List<string> warnings = [];
+        List<string> evidence = [];
+
+        if (string.IsNullOrWhiteSpace(options.ApplicationId)) failures.Add("ApplicationId is not configured.");
+        if (string.IsNullOrWhiteSpace(options.ApplicationName)) failures.Add("ApplicationName is not configured.");
+        if (string.IsNullOrWhiteSpace(options.RunStorePath)) failures.Add("RunStorePath is not configured.");
+
+        if (options.RequireApiKey)
+        {
+            if (string.IsNullOrWhiteSpace(options.ApiKeyHeader)) failures.Add("API-key authentication is enabled but ApiKeyHeader is not configured.");
+            if (string.IsNullOrWhiteSpace(options.ApiKeyEnvironmentVariable)) failures.Add("API-key authentication is enabled but ApiKeyEnvironmentVariable is not configured.");
+            else if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(options.ApiKeyEnvironmentVariable))) warnings.Add($"API-key environment variable {options.ApiKeyEnvironmentVariable} is not currently available.");
+        }
+
+        foreach (DiagnosticTargetOptions target in options.Targets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string targetName = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
+            if (string.IsNullOrWhiteSpace(target.ApplicationId)) warnings.Add($"Target '{target.Name}' has no ApplicationId.");
+            if (string.IsNullOrWhiteSpace(target.Name)) warnings.Add($"Target '{targetName}' has no display name.");
+            if (!string.IsNullOrWhiteSpace(target.BaseUrl) && !Uri.TryCreate(target.BaseUrl, UriKind.Absolute, out _)) failures.Add($"Target '{targetName}' has an invalid BaseUrl.");
+            if (target.RequireMachineCredential && string.IsNullOrWhiteSpace(target.ApiKeyEnvironmentVariable)) warnings.Add($"Target '{targetName}' requires a machine credential but no credential environment variable is configured.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.RunStorePath))
+        {
+            try
+            {
+                string fullPath = Path.GetFullPath(options.RunStorePath);
+                string? directory = Path.GetDirectoryName(fullPath);
+                if (string.IsNullOrWhiteSpace(directory))
+                {
+                    failures.Add("Run-store directory could not be resolved.");
+                }
+                else
+                {
+                    Directory.CreateDirectory(directory);
+                    string probePath = Path.Combine(directory, $".aegis-diagnostics-write-probe-{Guid.NewGuid():N}.tmp");
+                    await File.WriteAllTextAsync(probePath, "diagnostics-self-check", cancellationToken).ConfigureAwait(false);
+                    File.Delete(probePath);
+                    evidence.Add($"Run-store directory is writable: {directory}");
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                failures.Add($"Run-store path is not writable ({exception.GetType().Name}).");
+            }
+        }
+
+        evidence.Add($"Target catalog loaded: {options.Targets.Count} target(s)");
+        evidence.Add("Common.Diagnostics executed this self-check through the engineering diagnostic pipeline.");
+        stopwatch.Stop();
+
+        if (failures.Count > 0)
+        {
+            string summary = $"Aegis.Diagnostics self-check failed with {failures.Count} problem(s).";
+            string detail = string.Join(" ", failures.Concat(warnings).Concat(evidence)) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.";
+            return new EngineeringDiagnosticCheckResult(id, name, EngineeringDiagnosticStatus.Failed, summary, detail);
+        }
+
+        if (warnings.Count > 0)
+        {
+            string summary = $"Aegis.Diagnostics self-check completed with {warnings.Count} warning(s).";
+            string detail = string.Join(" ", warnings.Concat(evidence)) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.";
+            return new EngineeringDiagnosticCheckResult(id, name, EngineeringDiagnosticStatus.Warning, summary, detail);
+        }
+
+        return new EngineeringDiagnosticCheckResult(
+            id,
+            name,
+            EngineeringDiagnosticStatus.Passed,
+            "Aegis.Diagnostics self-check passed.",
+            string.Join(" ", evidence) + $" Elapsed={stopwatch.ElapsedMilliseconds} ms.");
+    }
 
     private async Task<EngineeringDiagnosticCheckResult> ExecuteRemoteAsync(string id, DiagnosticTargetOptions target, EngineeringDiagnosticLevel level, string? reason, CancellationToken cancellationToken)
     {

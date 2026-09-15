@@ -5,9 +5,32 @@ internal static class DiagnosticsApi
 {
     internal static void MapDiagnosticsApi(this WebApplication app, DiagnosticsOptions options)
     {
-        app.MapGet("/health", () => Results.Ok(new { status="Healthy", health=OperationalHealth.Healthy.ToString(), applicationId=options.ApplicationId, application=options.ApplicationName, siteId=options.SiteId, instanceId=options.InstanceId??Environment.MachineName, targets=options.Targets.Count, utc=DateTimeOffset.UtcNow }));
-        app.MapGet("/api/engineering/diagnostics/targets", (HttpContext c) => View(c) ? Results.Ok(options.Targets.Select(t => new { t.ApplicationId,t.Name,t.SiteId,t.InstanceId,t.ApplicationType,t.BaseUrl,t.HealthPath,t.DiagnosticsRunPath,t.DiagnosticsRunsPath,t.RequireMachineCredential })) : Results.Forbid());
+        app.MapGet("/health", (ConfigurationDiscoveryCatalog discovery) => Results.Ok(new
+        {
+            status = discovery.IsStale ? "Degraded" : "Healthy",
+            health = discovery.IsStale ? OperationalHealth.Degraded.ToString() : OperationalHealth.Healthy.ToString(),
+            applicationId = options.ApplicationId,
+            application = options.ApplicationName,
+            siteId = options.SiteId,
+            instanceId = options.InstanceId ?? Environment.MachineName,
+            discoveredTargets = discovery.Targets.Count,
+            discoveryLastSuccessfulUtc = discovery.LastSuccessfulRefreshUtc,
+            discoveryStale = discovery.IsStale,
+            utc = DateTimeOffset.UtcNow
+        }));
+
+        app.MapGet("/api/engineering/diagnostics/targets", (HttpContext c, ConfigurationDiscoveryCatalog discovery) =>
+            View(c) ? Results.Ok(new
+            {
+                source = "Aegis.Configuration",
+                lastSuccessfulRefreshUtc = discovery.LastSuccessfulRefreshUtc,
+                stale = discovery.IsStale,
+                error = discovery.LastError,
+                targets = discovery.Targets
+            }) : Results.Forbid());
+
         app.MapGet("/api/engineering/diagnostics/capabilities", (HttpContext c, RemoteDiagnosticCatalog catalog) => View(c) ? Results.Ok(catalog.GetCapabilities()) : Results.Forbid());
+        app.MapGet("/api/engineering/diagnostics/telemetry", GetTelemetryAsync);
         app.MapGet("/api/engineering/diagnostics/playbooks", (HttpContext c, DiagnosticPlaybookCatalog catalog) => View(c) ? Results.Ok(catalog.GetAll()) : Results.Forbid());
         app.MapGet("/api/engineering/diagnostics/incidents", GetIncidentsAsync);
         app.MapGet("/api/engineering/diagnostics/runs", GetRunsAsync);
@@ -15,8 +38,16 @@ internal static class DiagnosticsApi
         app.MapPost("/api/engineering/diagnostics/run", RunDiagnosticsAsync);
         app.MapPost("/api/engineering/diagnostics/runs/{runId:guid}/resolve", ResolveRunAsync);
     }
+
     static bool Has(HttpContext c,string p)=>c.Items.TryGetValue("SuiteIdentity",out object? v)&&v is SuiteIdentity i&&i.Permissions.Contains(p,StringComparer.OrdinalIgnoreCase);
     static bool View(HttpContext c)=>Has(c,"Diagnostics.View");
+
+    private static async Task<IResult> GetTelemetryAsync(HttpContext context, CancellationToken ct)
+    {
+        if (!View(context)) return Results.Forbid();
+        return Results.Ok(await OperationalTelemetryCollector.CaptureAsync(ct));
+    }
+
     private static async Task<IResult> GetIncidentsAsync(int? minutes,IEngineeringDiagnosticRunStore store,IncidentCorrelationService correlation,HttpContext context,CancellationToken ct){if(!View(context))return Results.Forbid();var runs=await store.GetRecentAsync(500,ct);TimeSpan window=TimeSpan.FromMinutes(Math.Clamp(minutes??15,1,1440));return Results.Ok(correlation.Correlate(runs,window));}
     private static async Task<IResult> GetRunsAsync(int? take,IEngineeringDiagnosticRunStore store,HttpContext context,CancellationToken ct)=>!View(context)?Results.Forbid():Results.Ok(await store.GetRecentAsync(Math.Clamp(take??25,1,100),ct));
     private static async Task<IResult> GetRunAsync(Guid runId,IEngineeringDiagnosticRunStore store,HttpContext context,CancellationToken ct){if(!View(context))return Results.Forbid();var run=await store.GetAsync(runId,ct);return run is null?Results.NotFound():Results.Ok(run);}

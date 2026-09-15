@@ -8,7 +8,9 @@
     "healthPath": "/health",
     "diagnosticsRunPath": "/api/engineering/diagnostics/run",
     "diagnosticsRunsPath": "/api/engineering/diagnostics/runs",
+    "telemetryPath": "/api/engineering/diagnostics/telemetry",
     "supportsRemoteDiagnostics": true,
+    "supportsOperationalTelemetry": true,
     "authenticationScheme": "MachineCredential",
     "secretName": "diagnostics/machine/Aegis.Diagnostics",
     "supportedLevels": [ 1, 2, 3, 4, 5 ]

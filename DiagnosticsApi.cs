@@ -5,27 +5,25 @@ internal static class DiagnosticsApi
 {
     internal static void MapDiagnosticsApi(this WebApplication app, DiagnosticsOptions options)
     {
-        app.MapGet("/health", (ConfigurationDiscoveryCatalog discovery, ApplicationHealthStateStore health) =>
-        {
-            IReadOnlyList<ApplicationHealthObservation> observations = health.GetAll();
-            bool anyFailed = observations.Any(item => item.Health == OperationalHealth.Unhealthy);
-            bool degraded = discovery.IsStale || observations.Any(item => item.Health is OperationalHealth.Degraded or OperationalHealth.Unknown);
-            OperationalHealth overall = anyFailed ? OperationalHealth.Unhealthy : degraded ? OperationalHealth.Degraded : OperationalHealth.Healthy;
-            return Results.Ok(new
+        app.MapAegisHealth(
+            options.ApplicationId,
+            (services, _) =>
             {
-                status = overall.ToString(),
-                health = overall.ToString(),
-                applicationId = options.ApplicationId,
-                application = options.ApplicationName,
-                siteId = options.SiteId,
-                instanceId = options.InstanceId ?? Environment.MachineName,
-                discoveredTargets = discovery.Targets.Count,
-                observedTargets = observations.Count,
-                discoveryLastSuccessfulUtc = discovery.LastSuccessfulRefreshUtc,
-                discoveryStale = discovery.IsStale,
-                utc = DateTimeOffset.UtcNow
-            });
-        });
+                ConfigurationDiscoveryCatalog discovery = services.GetRequiredService<ConfigurationDiscoveryCatalog>();
+                ApplicationHealthStateStore health = services.GetRequiredService<ApplicationHealthStateStore>();
+                IReadOnlyList<ApplicationHealthObservation> observations = health.GetAll();
+                bool anyFailed = observations.Any(item => item.Health == OperationalHealth.Unhealthy);
+                bool degraded = discovery.IsStale || observations.Any(item => item.Health is OperationalHealth.Degraded or OperationalHealth.Unknown);
+
+                AegisHealthAssessment assessment = anyFailed
+                    ? AegisHealthAssessment.Unhealthy($"One or more observed applications are unhealthy. Discovered {discovery.Targets.Count}; observed {observations.Count}; discovery stale: {discovery.IsStale}.")
+                    : degraded
+                        ? AegisHealthAssessment.Degraded($"Diagnostics is operational with degraded or stale observations. Discovered {discovery.Targets.Count}; observed {observations.Count}; discovery stale: {discovery.IsStale}.")
+                        : AegisHealthAssessment.Healthy($"Diagnostics discovery and observations are healthy. Discovered {discovery.Targets.Count}; observed {observations.Count}.");
+
+                return Task.FromResult(assessment);
+            },
+            instanceId: options.InstanceId);
 
         // Preserve the existing array response shape for the current Diagnostics UI. Inventory metadata
         // is exposed by /capabilities and health, while the target identities themselves come from Configuration.

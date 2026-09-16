@@ -12,14 +12,13 @@ internal static class DiagnosticsApi
                 ConfigurationDiscoveryCatalog discovery = services.GetRequiredService<ConfigurationDiscoveryCatalog>();
                 ApplicationHealthStateStore health = services.GetRequiredService<ApplicationHealthStateStore>();
                 IReadOnlyList<ApplicationHealthObservation> observations = health.GetAll();
-                bool anyFailed = observations.Any(item => item.Health == OperationalHealth.Unhealthy);
-                bool degraded = discovery.IsStale || observations.Any(item => item.Health is OperationalHealth.Degraded or OperationalHealth.Unknown);
 
-                AegisHealthAssessment assessment = anyFailed
-                    ? AegisHealthAssessment.Unhealthy($"One or more observed applications are unhealthy. Discovered {discovery.Targets.Count}; observed {observations.Count}; discovery stale: {discovery.IsStale}.")
-                    : degraded
-                        ? AegisHealthAssessment.Degraded($"Diagnostics is operational with degraded or stale observations. Discovered {discovery.Targets.Count}; observed {observations.Count}; discovery stale: {discovery.IsStale}.")
-                        : AegisHealthAssessment.Healthy($"Diagnostics discovery and observations are healthy. Discovered {discovery.Targets.Count}; observed {observations.Count}.");
+                // Diagnostics health describes Diagnostics itself, not the health of the applications it observes.
+                // A monitored application being unhealthy is evidence that Diagnostics is doing its job, not that
+                // Diagnostics should be restarted or rolled back. Target health remains available from /status.
+                AegisHealthAssessment assessment = discovery.IsStale
+                    ? AegisHealthAssessment.Degraded($"Diagnostics is operational but Configuration discovery is stale. Discovered {discovery.Targets.Count}; observed {observations.Count}.")
+                    : AegisHealthAssessment.Healthy($"Diagnostics discovery is current. Discovered {discovery.Targets.Count}; observed {observations.Count}.");
 
                 return Task.FromResult(assessment);
             },

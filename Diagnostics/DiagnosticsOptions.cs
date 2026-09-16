@@ -6,7 +6,7 @@ public sealed class DiagnosticsOptions
     public string ApplicationName { get; init; } = "Aegis.Diagnostics";
     public string? SiteId { get; init; }
     public string? InstanceId { get; init; }
-    public string EnvironmentName { get; init; } = "Production";
+    public string EnvironmentName { get; set; } = "Production";
     public bool RequireApiKey { get; init; } = true;
     public string ApiKeyHeader { get; init; } = "X-Aegis-Diagnostics-Key";
     public string MachineCredentialSecretName { get; init; } = "diagnostics/machine/Aegis.Diagnostics";

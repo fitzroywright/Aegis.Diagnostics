@@ -55,9 +55,7 @@ public sealed class ConfigurationContractPublisher(
             contract["runtimeEnvironment"] = DetectedRuntimeEnvironment.Capture(environment.EnvironmentName, environment.ContentRootPath);
 
             if (contract["diagnostics"] is JsonObject diagnostics)
-            {
                 diagnostics["secretName"] = options.MachineCredentialSecretName;
-            }
 
             if (contract["requirements"] is JsonArray requirements)
             {
@@ -66,7 +64,7 @@ public sealed class ConfigurationContractPublisher(
                 UpdateRequirement(requirements, "run-store", "Diagnostics:RunStorePath", "data/engineering-diagnostic-runs.json", cancellationToken);
                 UpdateRegistrationCredentialRequirement(requirements, registrationSecretPath, credential);
                 await UpdateSecretRequirementAsync(requirements, "diagnostics-machine-credential", options.MachineCredentialSecretName, cancellationToken);
-                AddSecretManagerMetadata(requirements);
+                AddSecretManagerMetadata(requirements, contract);
             }
 
             using HttpClient client = new() { Timeout = TimeSpan.FromSeconds(10) };
@@ -146,21 +144,24 @@ public sealed class ConfigurationContractPublisher(
         requirement.Remove("safeDisplayValue");
     }
 
-    private void AddSecretManagerMetadata(JsonArray requirements)
+    private void AddSecretManagerMetadata(JsonArray requirements, JsonObject contract)
     {
-        string mode = configuration["CommonSecrets:Mode"] ?? "Production";
-        string[] order = configuration.GetSection("CommonSecrets:ProviderOrder").Get<string[]>() ?? [];
-        string openBaoAddress = configuration["CommonSecrets:OpenBao:Address"] ?? string.Empty;
-        bool openBaoEnabled = configuration.GetValue("CommonSecrets:OpenBao:Enabled", false);
+        SecretProviderMetadata metadata = SecretProviderMetadataResolver.Resolve(configuration);
+        string providerOrder = metadata.ProviderOrder.Count == 0 ? string.Empty : string.Join(" → ", metadata.ProviderOrder);
 
-        UpsertMetadata(requirements, "secret-manager-mode", "Secret Manager Mode", "CommonSecrets:Mode", mode);
-        UpsertMetadata(requirements, "secret-manager-provider-order", "Secret Provider Order", "CommonSecrets:ProviderOrder", order.Length == 0 ? null : string.Join(" → ", order));
-        UpsertMetadata(requirements, "openbao-enabled", "OpenBao Enabled", "CommonSecrets:OpenBao:Enabled", openBaoEnabled.ToString());
-        UpsertMetadata(requirements, "openbao-address", "OpenBao Address", "CommonSecrets:OpenBao:Address", NullIfBlank(openBaoAddress));
-        UpsertMetadata(requirements, "openbao-scope", "OpenBao Endpoint Scope", "CommonSecrets:OpenBao:Address", DescribeEndpointScope(openBaoAddress));
+        UpsertMetadata(requirements, "secret-manager-mode", "Secret Manager Mode", "CommonSecrets:Mode", metadata.Mode.ToString());
+        UpsertMetadata(requirements, "secret-manager-provider", "Secret Provider", null, metadata.ActiveProvider);
+        UpsertMetadata(requirements, "secret-manager-provider-order", "Secret Provider Order", "CommonSecrets:ProviderOrder", NullIfBlank(providerOrder));
+        UpsertMetadata(requirements, "secret-manager-management-url", "Secret Provider Management URL", null, metadata.ManagementUrl);
+
+        contract["secrets"] = new JsonObject
+        {
+            ["provider"] = metadata.ActiveProvider,
+            ["managementUrl"] = metadata.ManagementUrl
+        };
     }
 
-    private static void UpsertMetadata(JsonArray requirements, string id, string displayName, string key, string? value)
+    private static void UpsertMetadata(JsonArray requirements, string id, string displayName, string? key, string? value)
     {
         JsonObject? existing = Find(requirements, id);
         JsonObject requirement = existing ?? new JsonObject
@@ -169,36 +170,23 @@ public sealed class ConfigurationContractPublisher(
             ["displayName"] = displayName,
             ["kind"] = "Configuration",
             ["required"] = false,
-            ["purpose"] = "Safe Secret Manager deployment metadata; no credentials or secret values are published.",
-            ["configurationKey"] = key,
+            ["purpose"] = "Safe Common.Secrets capability metadata; no credentials or secret values are published.",
             ["sensitive"] = false
         };
+        if (key is not null) requirement["configurationKey"] = key;
+        else requirement.Remove("configurationKey");
         if (existing is null) requirements.Add(requirement);
         bool configured = !string.IsNullOrWhiteSpace(value);
         requirement["isConfigured"] = configured;
         requirement["effectiveValueAvailable"] = configured;
         requirement["configurationState"] = configured ? "Configured" : "Unresolved";
-        requirement["effectiveSource"] = configured ? "Resolved IConfiguration" : "Unresolved";
+        requirement["effectiveSource"] = configured ? "Common.Secrets" : "Unresolved";
         requirement.Remove("safeDisplayValue");
         if (configured) requirement["safeDisplayValue"] = value;
     }
 
     private static JsonObject? Find(JsonArray requirements, string id)
         => requirements.OfType<JsonObject>().FirstOrDefault(item => string.Equals(item["id"]?.GetValue<string>(), id, StringComparison.OrdinalIgnoreCase));
-
-    private static string DescribeEndpointScope(string? address)
-    {
-        if (!Uri.TryCreate(address, UriKind.Absolute, out Uri? uri)) return "Unknown";
-        if (uri.IsLoopback) return "Local machine";
-        if (System.Net.IPAddress.TryParse(uri.Host, out System.Net.IPAddress? ip))
-        {
-            byte[] bytes = ip.GetAddressBytes();
-            bool privateV4 = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
-                (bytes[0] == 10 || (bytes[0] == 172 && bytes[1] is >= 16 and <= 31) || (bytes[0] == 192 && bytes[1] == 168));
-            return privateV4 ? "Private network" : "Public/remote address";
-        }
-        return "DNS endpoint; hosting locality cannot be determined from configuration alone";
-    }
 
     private static string? First(params string?[] values) => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
+using Common.Registration;
 using Common.Secrets;
 
 namespace Aegis.Diagnostics;
@@ -33,9 +34,19 @@ public sealed class ConfigurationContractPublisher(
         try
         {
             if (!File.Exists(path)) { logger.LogWarning("Diagnostics configuration contract not found at {ContractPath}; Diagnostics remains operational.", path); return false; }
-            string registrationSecretPath = $"configuration/registration/{ApplicationId}";
-            string? key = await secrets.GetAsync(registrationSecretPath, cancellationToken);
-            if (string.IsNullOrWhiteSpace(key)) { logger.LogWarning("Aegis.Configuration registration credential unavailable; Diagnostics remains operational."); return false; }
+
+            string registrationSecretPath = RegistrationCredentialResolver.SecretNameFor(ApplicationId);
+            RegistrationCredentialResolution credential = await RegistrationCredentialResolver.ResolveAsync(
+                () => Environment.GetEnvironmentVariable(RegistrationCredentialResolver.EnvironmentVariableName),
+                token => secrets.GetAsync(registrationSecretPath, token),
+                () => configuration[RegistrationCredentialResolver.AppSettingKey],
+                cancellationToken);
+
+            if (!credential.Succeeded)
+            {
+                logger.LogWarning("Aegis.Configuration registration credential unavailable from Environment, SecretProvider, and AppSetting; Diagnostics remains operational. SecretProviderError={SecretProviderError}", credential.SecretProviderError);
+                return false;
+            }
 
             JsonObject contract = JsonNode.Parse(await File.ReadAllTextAsync(path, cancellationToken))!.AsObject();
             contract["version"] = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
@@ -53,18 +64,18 @@ public sealed class ConfigurationContractPublisher(
                 UpdateRequirement(requirements, "public-url", "Aegis:PublicUrl", null, cancellationToken);
                 UpdateRequirement(requirements, "configuration-url", "Aegis:Configuration:Url", null, cancellationToken);
                 UpdateRequirement(requirements, "run-store", "Diagnostics:RunStorePath", "data/engineering-diagnostic-runs.json", cancellationToken);
-                await UpdateSecretRequirementAsync(requirements, "configuration-registration-key", registrationSecretPath, cancellationToken);
+                UpdateRegistrationCredentialRequirement(requirements, registrationSecretPath, credential);
                 await UpdateSecretRequirementAsync(requirements, "diagnostics-machine-credential", options.MachineCredentialSecretName, cancellationToken);
                 AddSecretManagerMetadata(requirements);
             }
 
             using HttpClient client = new() { Timeout = TimeSpan.FromSeconds(10) };
             using HttpRequestMessage request = new(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/api/contracts/register");
-            request.Headers.TryAddWithoutValidation("X-Aegis-Registration-Key", key);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Registration-Key", credential.Credential);
             request.Content = new StringContent(contract.ToJsonString(), Encoding.UTF8, "application/json");
             using HttpResponseMessage response = await client.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode) { logger.LogWarning("Aegis.Configuration rejected Diagnostics publication with HTTP {StatusCode}; Diagnostics remains operational.", (int)response.StatusCode); return false; }
-            logger.LogInformation("Aegis.Diagnostics published its configuration contract heartbeat to Aegis.Configuration.");
+            logger.LogInformation("Aegis.Diagnostics published its configuration contract heartbeat to Aegis.Configuration using registration credential source {CredentialSource}.", credential.Source);
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
@@ -87,6 +98,25 @@ public sealed class ConfigurationContractPublisher(
         requirement["effectiveSource"] = configured ? "Resolved IConfiguration" : hasDefault ? "Runtime/Code Default" : "Unresolved";
         requirement.Remove("safeDisplayValue");
         if (configured || hasDefault) requirement["safeDisplayValue"] = value ?? codeDefault;
+    }
+
+    private static void UpdateRegistrationCredentialRequirement(JsonArray requirements, string secretName, RegistrationCredentialResolution credential)
+    {
+        JsonObject? requirement = Find(requirements, "configuration-registration-key");
+        if (requirement is null) return;
+        requirement["secretName"] = secretName;
+        requirement["configurationKey"] = RegistrationCredentialResolver.AppSettingKey;
+        requirement["environmentVariable"] = RegistrationCredentialResolver.EnvironmentVariableName;
+        requirement["sensitive"] = true;
+        requirement["isConfigured"] = credential.Succeeded;
+        requirement["effectiveValueAvailable"] = credential.Succeeded;
+        requirement["configurationState"] = credential.Succeeded ? "Configured" : "Unresolved";
+        requirement["effectiveSource"] = credential.Source.ToString();
+        requirement["verificationStatus"] = credential.Succeeded ? "Resolved" : "Missing";
+        requirement["allowedSources"] = new JsonArray("Environment", "SecretProvider", "AppSetting");
+        requirement["resolutionOrder"] = new JsonArray("Environment", "SecretProvider", "AppSetting");
+        requirement["secretProviderError"] = credential.SecretProviderError;
+        requirement.Remove("safeDisplayValue");
     }
 
     private async Task UpdateSecretRequirementAsync(JsonArray requirements, string id, string secretName, CancellationToken cancellationToken)

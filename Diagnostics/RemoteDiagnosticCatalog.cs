@@ -37,11 +37,31 @@ public sealed class RemoteDiagnosticCatalog
 
         foreach (DiagnosticTargetOptions target in discovery.Targets)
         {
-            if (!target.SupportsRemoteDiagnostics) continue;
-            if (!target.SupportedLevels.Contains((int)requestedLevel)) continue;
             string identity = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
             string id = $"{identity}-level-{(int)requestedLevel}".ToLowerInvariant().Replace('.', '-');
-            checks.Add(new EngineeringDiagnosticCheckDefinition(id, $"{target.Name} — Level {(int)requestedLevel}", requestedLevel, cancellationToken => ExecuteRemoteAsync(id, target, requestedLevel, reason, cancellationToken)));
+            string displayName = $"{target.Name} — Level {(int)requestedLevel}";
+
+            if (!target.SupportsRemoteDiagnostics)
+            {
+                checks.Add(new EngineeringDiagnosticCheckDefinition(
+                    id,
+                    displayName,
+                    requestedLevel,
+                    _ => Task.FromResult(NotExecuted(id, displayName, "Application does not advertise remote diagnostics capability.", target.ApplicationId))));
+                continue;
+            }
+
+            if (!target.SupportedLevels.Contains((int)requestedLevel))
+            {
+                checks.Add(new EngineeringDiagnosticCheckDefinition(
+                    id,
+                    displayName,
+                    requestedLevel,
+                    _ => Task.FromResult(NotExecuted(id, displayName, $"Application does not advertise support for Level {(int)requestedLevel}.", target.ApplicationId))));
+                continue;
+            }
+
+            checks.Add(new EngineeringDiagnosticCheckDefinition(id, displayName, requestedLevel, cancellationToken => ExecuteRemoteAsync(id, target, requestedLevel, reason, cancellationToken)));
         }
         return checks;
     }
@@ -207,6 +227,9 @@ public sealed class RemoteDiagnosticCatalog
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) { stopwatch.Stop(); return new(id, displayName, EngineeringDiagnosticStatus.Failed, "Application diagnostics request timed out.", $"Elapsed {stopwatch.ElapsedMilliseconds} ms."); }
         catch (HttpRequestException exception) { stopwatch.Stop(); return new(id, displayName, EngineeringDiagnosticStatus.Failed, "Application diagnostics endpoint could not be reached.", $"{exception.GetType().Name}; elapsed={stopwatch.ElapsedMilliseconds} ms."); }
     }
+
+    private static EngineeringDiagnosticCheckResult NotExecuted(string id, string name, string reason, string? evidence = null)
+        => new(id, name, EngineeringDiagnosticStatus.Warning, $"NOT EXECUTED — {reason}", evidence);
 
     private static EngineeringDiagnosticCheckResult Warning(string id, string name, string summary, string? evidence = null) => new(id, name, EngineeringDiagnosticStatus.Warning, summary, evidence);
     private static void AddCredential(HttpRequestMessage request, string? credential) { if (!string.IsNullOrWhiteSpace(credential)) request.Headers.TryAddWithoutValidation("X-Aegis-Diagnostics-Key", credential); }

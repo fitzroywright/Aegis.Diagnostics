@@ -4,6 +4,10 @@ using Common.Secrets;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 DiagnosticsOptions diagnosticsOptions = builder.Configuration.GetSection("Diagnostics").Get<DiagnosticsOptions>() ?? new DiagnosticsOptions();
+if (string.IsNullOrWhiteSpace(diagnosticsOptions.EnvironmentName))
+{
+    diagnosticsOptions.EnvironmentName = builder.Environment.EnvironmentName;
+}
 builder.Services.AddSingleton(diagnosticsOptions);
 builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient("configuration-discovery", client => client.Timeout = TimeSpan.FromSeconds(10));

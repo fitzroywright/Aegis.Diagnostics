@@ -36,6 +36,7 @@ internal static class DiagnosticsAuthorization
         if (operatorIdentity is not null)
         {
             context.Items["SuiteIdentity"] = operatorIdentity;
+            suiteSecurity.Set(context.Response, operatorIdentity);
             return true;
         }
 

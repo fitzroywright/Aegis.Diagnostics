@@ -74,7 +74,7 @@ public sealed class ConfigurationContractPublisher(
             ApplicationRegistrationStatus result = await registration.RegisterAsync(contract, cancellationToken);
             if (!result.IsRegistered)
             {
-                logger.LogWarning("Aegis.Diagnostics registration state is {RegistrationState}: {RegistrationError}; Diagnostics remains operational. Bootstrap must be repeated in Operations when the key is missing, invalid, or revoked.", result.State, result.Error ?? "No additional detail.");
+                logger.LogWarning("Aegis.Diagnostics registration state is {RegistrationState}: {RegistrationError}; Diagnostics remains operational. Normal applications require a new pending registration when the key is missing, invalid, or revoked; control-plane credentials recover automatically.", result.State, result.Error ?? "No additional detail.");
                 return false;
             }
             logger.LogInformation("Aegis.Diagnostics registration is valid and its configuration contract was published.");

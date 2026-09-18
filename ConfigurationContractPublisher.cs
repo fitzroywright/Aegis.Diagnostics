@@ -45,6 +45,13 @@ public sealed class ConfigurationContractPublisher(
 
             if (contract["requirements"] is JsonArray requirements)
             {
+                for (int i = requirements.Count - 1; i >= 0; i--)
+                {
+                    if (requirements[i] is JsonObject item &&
+                        string.Equals(item["id"]?.GetValue<string>(), "configuration-registration-key", StringComparison.OrdinalIgnoreCase))
+                        requirements.RemoveAt(i);
+                }
+
                 UpdateRequirement(requirements, "public-url", "Aegis:PublicUrl", null, cancellationToken);
                 UpdateRequirement(requirements, "configuration-url", "Aegis:Configuration:Url", null, cancellationToken);
                 UpdateRequirement(requirements, "run-store", "Diagnostics:RunStorePath", "data/engineering-diagnostic-runs.json", cancellationToken);

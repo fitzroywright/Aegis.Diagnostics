@@ -67,7 +67,10 @@ public sealed class ConfigurationContractPublisher(
                     ApplicationId,
                     contract["instanceId"]?.GetValue<string>() ?? Environment.MachineName,
                     RegistrationCredentialResolver.EnvironmentVariableName,
-                    TimeSpan.FromSeconds(10)));
+                    TimeSpan.FromSeconds(10),
+                    AutoProvisionControlPlane: true,
+                    CredentialFilePath: configuration["Aegis:Registration:CredentialFile"]
+                        ?? "/var/lib/aegis/diagnostics/registration.key"));
             ApplicationRegistrationStatus result = await registration.RegisterAsync(contract, cancellationToken);
             if (!result.IsRegistered)
             {

@@ -61,5 +61,6 @@
       "hasDefault": true,
       "defaultValue": "data/engineering-diagnostic-runs.json"
     }
-  ]
+  ],
+  "runbookReference": "docs/RUNBOOK.md"
 }

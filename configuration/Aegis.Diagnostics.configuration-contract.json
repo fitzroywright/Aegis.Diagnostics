@@ -13,7 +13,13 @@
     "supportsOperationalTelemetry": true,
     "authenticationScheme": "MachineCredential",
     "secretName": "diagnostics/machine/Aegis.Diagnostics",
-    "supportedLevels": [ 1, 2, 3, 4, 5 ]
+    "supportedLevels": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
   },
   "requirements": [
     {
@@ -33,16 +39,6 @@
       "purpose": "Inventory and deployment-truth source used by Aegis.Diagnostics.",
       "configurationKey": "Aegis:Configuration:Url",
       "isConfigured": false
-    },
-    {
-      "id": "configuration-registration-key",
-      "displayName": "Configuration Registration Credential",
-      "kind": "Secret",
-      "required": true,
-      "purpose": "Authenticates Diagnostics contract publication and Configuration discovery.",
-      "secretName": "configuration/registration/Aegis.Diagnostics",
-      "isConfigured": false,
-      "sensitive": true
     },
     {
       "id": "diagnostics-machine-credential",

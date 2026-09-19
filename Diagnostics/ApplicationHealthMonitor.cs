@@ -2,7 +2,6 @@ namespace Aegis.Diagnostics;
 
 using Common.Diagnostics;
 using System.Diagnostics;
-using System.Text.Json;
 
 public sealed record ApplicationHealthObservation(
     string ApplicationId,
@@ -81,41 +80,11 @@ public sealed class ApplicationHealthMonitor(
             using HttpResponseMessage response = await client.GetAsync(healthUri, cancellationToken).ConfigureAwait(false);
             stopwatch.Stop();
 
-            OperationalHealth health = OperationalHealth.Unknown;
-            string summary = $"Health endpoint returned HTTP {(int)response.StatusCode}.";
-
-            if (response.IsSuccessStatusCode)
-            {
-                try
-                {
-                    using JsonDocument document = JsonDocument.Parse(
-                        await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-                    string? published = document.RootElement.TryGetProperty("status", out JsonElement status) &&
-                                        status.ValueKind == JsonValueKind.String
-                        ? status.GetString()
-                        : null;
-
-                    health = published?.Trim().ToLowerInvariant() switch
-                    {
-                        "healthy" => OperationalHealth.Healthy,
-                        "degraded" or "warning" => OperationalHealth.Degraded,
-                        "unhealthy" or "failed" or "offline" => OperationalHealth.Unhealthy,
-                        _ => OperationalHealth.Unknown
-                    };
-                    summary = health == OperationalHealth.Unknown
-                        ? "Health endpoint responded but did not publish a recognized operational state."
-                        : $"Application published {published}.";
-                }
-                catch (JsonException)
-                {
-                    health = OperationalHealth.Unknown;
-                    summary = "Health endpoint responded with malformed or non-JSON telemetry.";
-                }
-            }
-            else
-            {
-                health = OperationalHealth.Unhealthy;
-            }
+            string payload = await response.Content
+                .ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
+            (OperationalHealth health, string summary) =
+                ApplicationHealthResponseClassifier.Classify(response.StatusCode, payload);
 
             state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, health, observedAt, stopwatch.ElapsedMilliseconds, (int)response.StatusCode, summary));
         }

@@ -57,7 +57,10 @@ jobs:
       - name: Restore
         run: dotnet restore Aegis.Diagnostics.UnitTests/Aegis.Diagnostics.UnitTests.csproj
 
-      - name: Build
+      - name: Build Debug
+        run: dotnet build Aegis.Diagnostics.UnitTests/Aegis.Diagnostics.UnitTests.csproj --no-restore --configuration Debug
+
+      - name: Build Release
         shell: pwsh
         run: |
           dotnet build Aegis.Diagnostics.UnitTests/Aegis.Diagnostics.UnitTests.csproj --no-restore --configuration Release 2>&1 | Tee-Object -FilePath build.log

@@ -32,6 +32,48 @@ internal static class DiagnosticsApi
         app.MapGet("/api/engineering/diagnostics/status", (HttpContext c, ApplicationHealthStateStore health) =>
             View(c) ? Results.Ok(new { source = "Aegis.Diagnostics", observations = health.GetAll() }) : Results.Forbid());
 
+        app.MapGet("/api/engineering/diagnostics/v2/observations", (string? applicationId, HttpContext c, DiagnosticContractV2StateStore store) =>
+            View(c) ? Results.Ok(store.GetObservations(applicationId)) : Results.Forbid());
+        app.MapGet("/api/engineering/diagnostics/v2/flows", (string? applicationId, HttpContext c, DiagnosticContractV2StateStore store) =>
+            View(c) ? Results.Ok(store.GetFlows(applicationId)) : Results.Forbid());
+        app.MapGet("/api/engineering/diagnostics/v2/synchronization", (string? applicationId, HttpContext c, DiagnosticContractV2StateStore store) =>
+            View(c) ? Results.Ok(store.GetSynchronization(applicationId)) : Results.Forbid());
+        app.MapGet("/api/engineering/diagnostics/v2/queues", (string? applicationId, HttpContext c, DiagnosticContractV2StateStore store) =>
+            View(c) ? Results.Ok(store.GetQueues(applicationId)) : Results.Forbid());
+        app.MapGet("/api/engineering/diagnostics/v2/decisions", (string? applicationId, HttpContext c, DiagnosticContractV2StateStore store) =>
+            View(c) ? Results.Ok(store.GetDecisions(applicationId)) : Results.Forbid());
+
+        app.MapPost("/api/engineering/diagnostics/v2/observations", (DiagnosticObservation item, HttpContext c, DiagnosticContractV2StateStore store) =>
+        {
+            if (!Has(c, "Diagnostics.Run")) return Results.Forbid();
+            store.Set(item);
+            return Results.Accepted();
+        });
+        app.MapPost("/api/engineering/diagnostics/v2/flows", (DiagnosticFlowInstance item, HttpContext c, DiagnosticContractV2StateStore store) =>
+        {
+            if (!Has(c, "Diagnostics.Run")) return Results.Forbid();
+            store.Set(item);
+            return Results.Accepted();
+        });
+        app.MapPost("/api/engineering/diagnostics/v2/synchronization", (SynchronizationDiagnostic item, HttpContext c, DiagnosticContractV2StateStore store) =>
+        {
+            if (!Has(c, "Diagnostics.Run")) return Results.Forbid();
+            store.Set(item);
+            return Results.Accepted();
+        });
+        app.MapPost("/api/engineering/diagnostics/v2/queues", (QueueDiagnostic item, HttpContext c, DiagnosticContractV2StateStore store) =>
+        {
+            if (!Has(c, "Diagnostics.Run")) return Results.Forbid();
+            store.Set(item);
+            return Results.Accepted();
+        });
+        app.MapPost("/api/engineering/diagnostics/v2/decisions", (DecisionDiagnostic item, HttpContext c, DiagnosticContractV2StateStore store) =>
+        {
+            if (!Has(c, "Diagnostics.Run")) return Results.Forbid();
+            store.Set(item);
+            return Results.Accepted();
+        });
+
         app.MapGet("/api/engineering/diagnostics/capabilities", (HttpContext c, RemoteDiagnosticCatalog catalog) => View(c) ? Results.Ok(catalog.GetCapabilities()) : Results.Forbid());
         app.MapGet("/api/engineering/diagnostics/telemetry", GetTelemetryAsync);
         app.MapGet("/api/engineering/diagnostics/playbooks", (HttpContext c, DiagnosticPlaybookCatalog catalog) => View(c) ? Results.Ok(catalog.GetAll()) : Results.Forbid());

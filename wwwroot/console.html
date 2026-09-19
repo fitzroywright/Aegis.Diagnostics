@@ -16,7 +16,9 @@
 <script src="/session.js"></script>
 <script>
 const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason');
-const tick=()=>clock.textContent=new Date().toLocaleString();tick();setInterval(tick,30000);
+const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);return Number.isNaN(d.getTime())?String(v??'—'):d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'});};
+const localZone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
+const tick=()=>{const d=new Date();clock.textContent=localDateTime(d)+' · '+localZone();};tick();setInterval(tick,30000);
 fetch('/health',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(h=>{if(h?.siteId)site.textContent=h.siteId}).catch(()=>{});
 const statusName=v=>typeof v==='number'?({1:'Passed',2:'Warning',3:'Failed',4:'InterventionRequired'}[v]||v):v;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -31,7 +33,7 @@ async function load(){
  if(r.status===401){location.href='/login?returnUrl='+encodeURIComponent(location.pathname);return;}
  if(r.status===403){runs.innerHTML='<div class="notice">Your account is signed in but does not have permission to view diagnostic runs.</div>';return;}
  if(!r.ok){runs.innerHTML=`<div class="notice">Unable to load diagnostic runs (HTTP ${r.status}).</div>`;return;}
- const d=await r.json();runs.innerHTML=d.length?d.map(x=>`<article class="run"><div class="runmeta"><b>LEVEL ${esc(x.level)}</b><br><small>${new Date(x.startedAt).toLocaleString()}</small></div><div><b>${esc(x.application)}</b>${(x.checks||[]).map(c=>`<div class="check"><b>${esc(c.name)}</b><div>${esc(c.summary)}</div></div>`).join('')}</div><div class="status-${esc(statusName(x.status))}"><b>${esc(statusName(x.status))}</b></div></article>`).join(''):'<div class="run muted">NO DIAGNOSTIC RUNS RECORDED.</div>';
+ const d=await r.json();runs.innerHTML=d.length?d.map(x=>`<article class="run"><div class="runmeta"><b>LEVEL ${esc(x.level)}</b><br><small>${localDateTime(x.startedAt)}</small></div><div><b>${esc(x.application)}</b>${(x.checks||[]).map(c=>`<div class="check"><b>${esc(c.name)}</b><div>${esc(c.summary)}</div></div>`).join('')}</div><div class="status-${esc(statusName(x.status))}"><b>${esc(statusName(x.status))}</b></div></article>`).join(''):'<div class="run muted">NO DIAGNOSTIC RUNS RECORDED.</div>';
 }
 async function run(level){
  if(level<=2&&!reason.value.trim()){alert('LEVELS 2 AND 1 REQUIRE AN ENGINEERING REASON.');return;}

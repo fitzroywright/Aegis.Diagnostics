@@ -2,6 +2,7 @@ namespace Aegis.Diagnostics;
 
 using Common.Diagnostics;
 using System.Diagnostics;
+using System.Text.Json;
 
 public sealed record ApplicationHealthObservation(
     string ApplicationId,
@@ -79,19 +80,54 @@ public sealed class ApplicationHealthMonitor(
         {
             using HttpResponseMessage response = await client.GetAsync(healthUri, cancellationToken).ConfigureAwait(false);
             stopwatch.Stop();
-            OperationalHealth health = response.IsSuccessStatusCode ? OperationalHealth.Healthy : OperationalHealth.Unhealthy;
-            state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, health, observedAt, stopwatch.ElapsedMilliseconds, (int)response.StatusCode,
-                response.IsSuccessStatusCode ? "Health endpoint responded successfully." : $"Health endpoint returned HTTP {(int)response.StatusCode}."));
+
+            OperationalHealth health = OperationalHealth.Unknown;
+            string summary = $"Health endpoint returned HTTP {(int)response.StatusCode}.";
+
+            if (response.IsSuccessStatusCode)
+            {
+                try
+                {
+                    using JsonDocument document = JsonDocument.Parse(
+                        await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+                    string? published = document.RootElement.TryGetProperty("status", out JsonElement status) &&
+                                        status.ValueKind == JsonValueKind.String
+                        ? status.GetString()
+                        : null;
+
+                    health = published?.Trim().ToLowerInvariant() switch
+                    {
+                        "healthy" => OperationalHealth.Healthy,
+                        "degraded" or "warning" => OperationalHealth.Degraded,
+                        "unhealthy" or "failed" or "offline" => OperationalHealth.Unhealthy,
+                        _ => OperationalHealth.Unknown
+                    };
+                    summary = health == OperationalHealth.Unknown
+                        ? "Health endpoint responded but did not publish a recognized operational state."
+                        : $"Application published {published}.";
+                }
+                catch (JsonException)
+                {
+                    health = OperationalHealth.Unknown;
+                    summary = "Health endpoint responded with malformed or non-JSON telemetry.";
+                }
+            }
+            else
+            {
+                health = OperationalHealth.Unhealthy;
+            }
+
+            state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, health, observedAt, stopwatch.ElapsedMilliseconds, (int)response.StatusCode, summary));
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
-            state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, OperationalHealth.Unhealthy, observedAt, stopwatch.ElapsedMilliseconds, null, "Health request timed out."));
+            state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, OperationalHealth.Unknown, observedAt, stopwatch.ElapsedMilliseconds, null, "Health request timed out; health could not be established."));
         }
         catch (HttpRequestException exception)
         {
             stopwatch.Stop();
-            state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, OperationalHealth.Unhealthy, observedAt, stopwatch.ElapsedMilliseconds, null, $"Health endpoint is unreachable ({exception.GetType().Name})."));
+            state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, OperationalHealth.Unknown, observedAt, stopwatch.ElapsedMilliseconds, null, $"Health endpoint is unreachable ({exception.GetType().Name}); current health is unknown."));
         }
     }
 }

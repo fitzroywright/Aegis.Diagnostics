@@ -16,14 +16,16 @@
 <script src="/session.js"></script>
 <script>
 const api='/api/engineering/diagnostics';
-const tick=()=>clock.textContent=new Date().toLocaleString();tick();setInterval(tick,30000);
+const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);return Number.isNaN(d.getTime())?String(v??'—'):d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'});};
+const localZone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
+const tick=()=>{const d=new Date();clock.textContent=localDateTime(d)+' · '+localZone();};tick();setInterval(tick,30000);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 async function get(path){return fetch(path,{cache:'no-store'});}
 async function load(){
  try{
   const h=await fetch('/health',{cache:'no-store'}).then(r=>r.json());
   site.textContent=h.siteId||'—'; version.textContent=h.version?('v'+h.version):'version unavailable';
-  updated.textContent=`SITE ${h.siteId||'—'} / INSTANCE ${h.instanceId||'—'} / LAST SCAN ${new Date(h.utc).toLocaleString()}`;
+  updated.textContent=`SITE ${h.siteId||'—'} / INSTANCE ${h.instanceId||'—'} / LAST SCAN ${localDateTime(h.utc)}`;
   total.textContent=h.discoveredTargets??0; overall.textContent=String(h.health||h.status||'Unknown').toUpperCase(); overall.className=String(h.health||h.status||'Unknown');
   const r=await get(api+'/targets');
   if(r.status===401){ location.href='/login?returnUrl='+encodeURIComponent(location.pathname); return; }
@@ -34,7 +36,7 @@ async function load(){
   let runs=[]; const rr=await get(api+'/runs?take=100'); if(rr.ok)runs=await rr.json();
   const latest={}; for(const run of runs){const app=run.application||'';if(!latest[app]||new Date(run.completedAt)>new Date(latest[app].completedAt))latest[app]=run;}
   let counts={Healthy:0,Degraded:0,Unhealthy:0,Unknown:0};
-  targets.innerHTML=ts.map(t=>{const run=latest[t.applicationId]||latest[t.name];let state='Unknown';if(run){const s=typeof run.status==='number'?run.status:String(run.status);state=(s===1||s==='Passed')?'Healthy':(s===2||s==='Warning')?'Degraded':'Unhealthy';}counts[state]++;return `<article class="card"><small>${esc(t.applicationId||'')}</small><h2>${esc(t.name)}</h2><b class="${state}">${state}</b><p class="muted">Site ${esc(t.siteId||'—')} / Instance ${esc(t.instanceId||'—')}</p><p>${run?'Last diagnostic '+new Date(run.completedAt).toLocaleString():'No diagnostic run recorded'}</p><a href="/console.html">View Diagnostics →</a></article>`}).join('');
+  targets.innerHTML=ts.map(t=>{const run=latest[t.applicationId]||latest[t.name];let state='Unknown';if(run){const s=typeof run.status==='number'?run.status:String(run.status);state=(s===1||s==='Passed')?'Healthy':(s===2||s==='Warning')?'Degraded':'Unhealthy';}counts[state]++;return `<article class="card"><small>${esc(t.applicationId||'')}</small><h2>${esc(t.name)}</h2><b class="${state}">${state}</b><p class="muted">Site ${esc(t.siteId||'—')} / Instance ${esc(t.instanceId||'—')}</p><p>${run?'Last diagnostic '+localDateTime(run.completedAt):'No diagnostic run recorded'}</p><a href="/console.html">View Diagnostics →</a></article>`}).join('');
   healthy.textContent=counts.Healthy;degraded.textContent=counts.Degraded;unhealthy.textContent=counts.Unhealthy;total.textContent=ts.length;const o=counts.Unhealthy?'Unhealthy':counts.Degraded?'Degraded':counts.Unknown?'Unknown':'Healthy';overall.textContent=o.toUpperCase();overall.className=o;
   const ir=await get(api+'/incidents?minutes=60');if(ir.ok){const inc=await ir.json();incidents.innerHTML=inc.length?inc.map(i=>`<div class="incident"><b>${esc(i.summary)}</b><div class="muted">${esc((i.applications||[]).join(', '))}</div></div>`).join(''):'<div class="incident muted">No active incidents in the selected window.</div>';}
  }catch{updated.textContent='DIAGNOSTICS DATA UNAVAILABLE';targets.innerHTML='<div class="card">Unable to load diagnostics data.</div>';}

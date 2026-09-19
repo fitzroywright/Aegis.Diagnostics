@@ -60,24 +60,35 @@ public sealed class ConfigurationContractPublisher(
             }
 
             using HttpClient client = new();
-            var registration = new ApplicationRegistrationClient(
+            string instanceId =
+                contract["instanceId"]?.GetValue<string>()
+                ?? Environment.MachineName;
+
+            var registration = new ControlPlaneRegistrationClient(
                 client,
-                new ApplicationRegistrationOptions(
+                new ControlPlaneRegistrationOptions(
                     new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute),
                     ApplicationId,
-                    contract["instanceId"]?.GetValue<string>() ?? Environment.MachineName,
-                    RegistrationCredentialResolver.EnvironmentVariableName,
-                    TimeSpan.FromSeconds(10),
-                    AutoProvisionControlPlane: true,
-                    CredentialFilePath: configuration["Aegis:Registration:CredentialFile"]
-                        ?? "/var/lib/aegis/diagnostics/registration.key"));
-            ApplicationRegistrationStatus result = await registration.RegisterAsync(contract, cancellationToken);
+                    instanceId,
+                    configuration["Aegis:Registration:CredentialFile"]
+                        ?? "/var/lib/aegis/diagnostics/registration.key",
+                    TimeSpan.FromSeconds(10)),
+                logger);
+
+            ControlPlaneRegistrationStatus result =
+                await registration.RegisterAsync(contract, cancellationToken);
+
             if (!result.IsRegistered)
             {
-                logger.LogWarning("Aegis.Diagnostics registration state is {RegistrationState}: {RegistrationError}; Diagnostics remains operational. Normal applications require a new pending registration when the key is missing, invalid, or revoked; control-plane credentials recover automatically.", result.State, result.Error ?? "No additional detail.");
+                logger.LogWarning(
+                    "Aegis.Diagnostics control-plane registration state is {RegistrationState}: {RegistrationError}; Diagnostics remains operational.",
+                    result.State,
+                    result.Error ?? "No additional detail.");
                 return false;
             }
-            logger.LogInformation("Aegis.Diagnostics registration is valid and its configuration contract was published.");
+
+            logger.LogInformation(
+                "Aegis.Diagnostics control-plane registration is valid and its configuration contract was published.");
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }

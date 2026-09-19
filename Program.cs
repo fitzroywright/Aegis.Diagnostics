@@ -19,6 +19,7 @@ builder.Services.AddSingleton<ConfigurationDiscoveryCatalog>();
 builder.Services.AddSingleton<IDiagnosticTargetCatalog>(services => services.GetRequiredService<ConfigurationDiscoveryCatalog>());
 builder.Services.AddHostedService<ConfigurationDiscoveryWorker>();
 builder.Services.AddSingleton<ApplicationHealthStateStore>();
+builder.Services.AddSingleton<DiagnosticContractV2StateStore>();
 builder.Services.AddHostedService<ApplicationHealthMonitor>();
 builder.Services.AddDiagnosticsMessaging(builder.Configuration);
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();

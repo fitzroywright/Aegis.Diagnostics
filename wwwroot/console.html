@@ -11,11 +11,11 @@
 <body>
 <header class="topbar"><div class="cornerbars"><i></i><i></i></div><div class="brand"><span class="gear">✹</span><div><strong>System <em>Diagnostics</em></strong><small>KNOW WHAT IS WORKING. KNOW WHAT NEEDS ATTENTION.</small></div></div><div class="site" id="site">—</div><div class="clock" id="clock"></div><div class="userbox"><div><b id="userName">Signed in</b><small id="userTitle">—</small><small id="sessionInfo"></small></div><button class="signout" data-signout>Sign Out</button></div></header>
 <div class="frame"><aside class="sidebar"><nav><a href="https://operations.ffpja.org"><span>←</span>Operations</a><a href="/"><span>▦</span>Health</a><a class="active" href="/console.html"><span>⌁</span>Engineering</a></nav><div class="sidefoot"><b>System<br>Diagnostics</b><small>Engineering Console</small></div></aside>
-<main><section class="page-head"><div><h1>Engineering Console</h1><p>Progressive engineering diagnostics from Level 5 scan through Level 1 critical intervention</p><div id="accessSummary" class="session-note">Checking permissions…</div></div></section><section class="levels"><button class="level" data-level="5"><b>LEVEL 5</b>SCAN<small>Broad health scan</small></button><button class="level" data-level="4"><b>LEVEL 4</b>ANALYSIS<small>Deeper diagnostic analysis</small></button><button class="level" data-level="3"><b>LEVEL 3</b>VERIFICATION<small>Targeted verification</small></button><button class="level" data-level="2"><b>LEVEL 2</b>REPAIR<small>Controlled repair action</small></button><button class="level" data-level="1"><b>LEVEL 1</b>CRITICAL<small>Critical intervention</small></button></section><section class="reason-panel"><label for="reason">Engineering reason / incident context</label><textarea id="reason" placeholder="Required for Levels 2 and 1"></textarea></section><div class="sectiontitle">Engineering Runs</div><section id="runs" class="runs"><div class="run muted">Loading diagnostic history…</div></section></main></div>
+<main><section class="page-head"><div><h1>Engineering Console</h1><p>Progressive engineering diagnostics from Level 5 scan through Level 1 critical intervention</p><div id="accessSummary" class="session-note">Checking permissions…</div></div></section><section class="levels"><button class="level" data-level="5"><b>LEVEL 5</b>SCAN<small>Broad health scan</small></button><button class="level" data-level="4"><b>LEVEL 4</b>ANALYSIS<small>Deeper diagnostic analysis</small></button><button class="level" data-level="3"><b>LEVEL 3</b>VERIFICATION<small>Targeted verification</small></button><button class="level" data-level="2"><b>LEVEL 2</b>REPAIR<small>Controlled repair action</small></button><button class="level" data-level="1"><b>LEVEL 1</b>CRITICAL<small>Critical intervention</small></button></section><section class="reason-panel"><label for="reason">Engineering reason / incident context</label><textarea id="reason" placeholder="Required for Levels 2 and 1"></textarea></section><div class="sectiontitle">Operational V2 Evidence</div><section id="v2evidence" class="runs"><div class="run muted">Loading operational evidence…</div></section><div class="sectiontitle">Engineering Runs</div><section id="runs" class="runs"><div class="run muted">Loading diagnostic history…</div></section></main></div>
 <footer><b>System Diagnostics</b><span>│</span><span>Integrated Operations</span><div class="footright"><i class="dot"></i> Engineering Console</div></footer>
 <script src="/session.js"></script>
 <script>
-const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason');
+const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason'),v2evidence=document.getElementById('v2evidence');
 const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);return Number.isNaN(d.getTime())?String(v??'—'):d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'});};
 const localZone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
 const tick=()=>{const d=new Date();clock.textContent=localDateTime(d)+' · '+localZone();};tick();setInterval(tick,30000);
@@ -27,6 +27,26 @@ function applyPermissions(){
  const perms=i.permissions||[];const has=p=>perms.some(x=>String(x).toLowerCase()===p.toLowerCase());
  accessSummary.textContent=has('Diagnostics.Run')?'Authenticated engineering access':'View-only Diagnostics access';
  document.querySelectorAll('[data-level]').forEach(b=>{const level=Number(b.dataset.level);const needed=level===1?'Diagnostics.Critical':level===2?'Diagnostics.Repair':'Diagnostics.Run';b.disabled=!has(needed);b.title=b.disabled?`Permission required: ${needed}`:'';});
+}
+async function loadV2(){
+ const names=['observations','flows','synchronization','queues','decisions'];
+ try{
+  const results=await Promise.all(names.map(async name=>{
+   const r=await fetch(api+'/v2/'+name,{cache:'no-store'});
+   if(!r.ok)throw new Error(name+' HTTP '+r.status);
+   const data=await r.json();
+   return [name,Array.isArray(data)?data:[]];
+  }));
+  const map=Object.fromEntries(results);
+  const abnormal=(map.observations||[]).filter(x=>!['Healthy','Maintenance','NotSupported'].includes(String(x.state)));
+  const flowAbnormal=(map.flows||[]).filter(x=>(x.stages||[]).some(s=>['Warning','Failed','TimedOut','Unknown'].includes(String(s.state))));
+  v2evidence.innerHTML=`
+   <article class="run"><div class="runmeta"><b>OBSERVATIONS</b><br><small>${map.observations.length} current records</small></div><div><b>Operational state evidence</b><div class="check">${abnormal.length} record(s) are non-healthy, unknown, warning, degraded, failed or offline.</div></div><div class="${abnormal.length?'status-Warning':'status-Passed'}"><b>${abnormal.length?'REVIEW':'CLEAR'}</b></div></article>
+   <article class="run"><div class="runmeta"><b>FLOWS</b><br><small>${map.flows.length} traces</small></div><div><b>Correlated workflow evidence</b><div class="check">${flowAbnormal.length} trace(s) contain warning/failed/timed-out/unknown stages.</div></div><div class="${flowAbnormal.length?'status-Warning':'status-Passed'}"><b>${flowAbnormal.length?'REVIEW':'CLEAR'}</b></div></article>
+   <article class="run"><div class="runmeta"><b>SYNC / QUEUES</b><br><small>${map.synchronization.length} sync · ${map.queues.length} queue</small></div><div><b>Durable work state</b><div class="check">Decision observations: ${map.decisions.length}. Open the API endpoints for full evidence; this summary does not infer missing data as healthy.</div></div><div class="muted"><b>EVIDENCE</b></div></article>`;
+ }catch(err){
+  v2evidence.innerHTML='<div class="notice">Operational V2 evidence is unavailable: '+esc(err.message)+'</div>';
+ }
 }
 async function load(){
  const r=await fetch(api+'/runs?take=25',{cache:'no-store'});
@@ -43,7 +63,7 @@ async function run(level){
  if(!r.ok){alert(await r.text());return;}await load();
 }
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>run(Number(b.dataset.level)));
-(async()=>{try{await window.aegisSession.refresh();applyPermissions();await load();}catch{location.href='/login?returnUrl='+encodeURIComponent(location.pathname);}})();
-setInterval(load,30000);
+(async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([load(),loadV2()]);}catch{location.href='/login?returnUrl='+encodeURIComponent(location.pathname);}})();
+setInterval(()=>{load();loadV2();},30000);
 </script>
 </body></html>

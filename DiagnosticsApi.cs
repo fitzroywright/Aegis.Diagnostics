@@ -82,6 +82,8 @@ internal static class DiagnosticsApi
         app.MapGet("/api/engineering/diagnostics/runs/{runId:guid}", GetRunAsync);
         app.MapPost("/api/engineering/diagnostics/run", RunDiagnosticsAsync);
         app.MapPost("/api/engineering/diagnostics/runs/{runId:guid}/resolve", ResolveRunAsync);
+        app.MapGet("/api/engineering/diagnostics/activity", ProxyOperationsActivityAsync);
+        app.MapGet("/api/engineering/diagnostics/logs", ProxyOperationsLogsAsync);
     }
 
     static bool Machine(HttpContext c)=>c.Items.TryGetValue("DiagnosticsMachineAuthorized",out object? value)&&value is true;
@@ -101,5 +103,73 @@ internal static class DiagnosticsApi
     private static async Task<IResult> GetRunAsync(Guid runId,IEngineeringDiagnosticRunStore store,HttpContext context,CancellationToken ct){if(!View(context))return Results.Forbid();var run=await store.GetAsync(runId,ct);return run is null?Results.NotFound():Results.Ok(run);}
     private static async Task<IResult> RunDiagnosticsAsync(EngineeringDiagnosticRunRequest request,DiagnosticOrchestrationService orchestration,HttpContext context,CancellationToken ct){if(!Has(context,"Diagnostics.Run"))return Results.Forbid();try{return Results.Ok(await orchestration.RunAsync(request,OperatorName(context),ct));}catch(ArgumentException ex){return Results.BadRequest(new{error=ex.Message});}}
     private static async Task<IResult> ResolveRunAsync(Guid runId,EngineeringDiagnosticResolutionRequest request,IEngineeringDiagnosticRunStore store,HttpContext context,CancellationToken ct){if(!Has(context,"Diagnostics.Repair"))return Results.Forbid();if(string.IsNullOrWhiteSpace(request.Resolution))return Results.BadRequest(new{error="Resolution is required."});var resolved=await store.ResolveAsync(runId,OperatorName(context),request.Resolution.Trim(),ct);return resolved is null?Results.NotFound():Results.Ok(resolved);}
+
+    private static Task<IResult> ProxyOperationsActivityAsync(
+        HttpContext context,
+        IHttpClientFactory factory,
+        IConfiguration configuration,
+        CancellationToken ct) =>
+        ProxyOperationsAsync(
+            context,
+            factory,
+            configuration,
+            "/api/operations/activity",
+            ct);
+
+    private static Task<IResult> ProxyOperationsLogsAsync(
+        HttpContext context,
+        IHttpClientFactory factory,
+        IConfiguration configuration,
+        CancellationToken ct) =>
+        ProxyOperationsAsync(
+            context,
+            factory,
+            configuration,
+            "/api/operations/logs",
+            ct);
+
+    private static async Task<IResult> ProxyOperationsAsync(
+        HttpContext context,
+        IHttpClientFactory factory,
+        IConfiguration configuration,
+        string path,
+        CancellationToken ct)
+    {
+        if (!View(context)) return Results.Forbid();
+
+        string? operationsUrl =
+            configuration["Aegis:Operations:Url"] ??
+            configuration["AegisOperations:BaseUrl"] ??
+            configuration["Operations:Url"];
+
+        if (!Uri.TryCreate(operationsUrl, UriKind.Absolute, out Uri? baseUri))
+            return Results.Problem(
+                "Diagnostics cannot read the suite activity stream because Aegis:Operations:Url is not configured.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        var target = new Uri(
+            baseUri,
+            path + context.Request.QueryString.Value);
+
+        try
+        {
+            HttpClient client = factory.CreateClient("operations-activity");
+            using HttpResponseMessage response =
+                await client.GetAsync(target, ct).ConfigureAwait(false);
+
+            string body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            return Results.Content(
+                body,
+                response.Content.Headers.ContentType?.ToString() ?? "application/json",
+                statusCode: (int)response.StatusCode);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return Results.Problem(
+                "Diagnostics could not reach the Operations activity stream.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
     private static string OperatorName(HttpContext context)=>context.Items.TryGetValue("SuiteIdentity",out object? v)&&v is SuiteIdentity i?i.UserName:Machine(context)?"Aegis.Diagnostics Machine":context.User.Identity?.Name??context.Connection.RemoteIpAddress?.ToString()??"operator";
 }

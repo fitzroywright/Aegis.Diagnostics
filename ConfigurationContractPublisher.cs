@@ -19,7 +19,7 @@ public sealed class ConfigurationContractPublisher(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        string? baseUrl = First(configuration["Aegis:Operations:Url"], configuration["AegisOperations:BaseUrl"]);
+        string? baseUrl = configuration["Aegis:Operations:Url"];
         if (string.IsNullOrWhiteSpace(baseUrl)) { logger.LogInformation("Application registration is disabled because no Operations URL is configured."); return; }
         string path = configuration["AegisConfiguration:ContractPath"] ?? Path.Combine(environment.ContentRootPath, "configuration", "Aegis.Diagnostics.configuration-contract.json");
         while (!stoppingToken.IsCancellationRequested)

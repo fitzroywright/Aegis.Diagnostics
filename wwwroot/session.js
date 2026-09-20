@@ -98,7 +98,7 @@ function installAegisConsoleAudio(){
   const arm=document.querySelector('.workspace-arm');
   if(arm&&!document.getElementById('soundToggle')){
     const b=document.createElement('button');b.id='soundToggle';b.type='button';b.className='sound-toggle';
-    const paint=()=>{b.textContent=enabled()?'SOUND ON':'SOUND OFF';b.setAttribute('aria-pressed',String(enabled()))};paint();
+    const paint=()=>{b.innerHTML=enabled()?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm11.5 3a3.5 3.5 0 0 0-1.5-2.87v5.74A3.5 3.5 0 0 0 15.5 12zm0-7.1v2.06a7 7 0 0 1 0 10.08v2.06a9 9 0 0 0 0-14.2z"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm11.2.8 1.4 1.4 1.4-1.4 1.4 1.4-1.4 1.4 1.4 1.4-1.4 1.4-1.4-1.4-1.4 1.4-1.4-1.4 1.4-1.4-1.4-1.4 1.4-1.4z"/></svg>';b.title=enabled()?'Sound on':'Sound off';b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',String(enabled()))};paint();
     b.onclick=()=>{localStorage.setItem(key,enabled()?'off':'on');paint();if(enabled())cues.success()};
     arm.appendChild(b);
   }

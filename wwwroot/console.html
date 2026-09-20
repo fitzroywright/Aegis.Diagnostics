@@ -16,7 +16,7 @@
 .level[data-level="3"]:hover{box-shadow:inset 0 0 0 1px #ffcc6666}
 .level[data-level="2"]:hover{box-shadow:inset 0 0 0 1px #ff8a3d66}
 .level[data-level="1"]:hover{box-shadow:inset 0 0 0 1px #ff350066}
-.engineer-log-panel{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line-soft);border-top:2px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(8,27,42,.50),rgba(1,7,12,.40))}.engineer-log-panel b{color:var(--arctic-ice)}.engineer-log-panel small{color:var(--muted);margin-right:auto}.record-btn{width:38px;height:38px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--title-gold);color:#071018;cursor:pointer}.record-btn svg{width:20px;height:20px;fill:currentColor}.record-btn.recording{background:var(--sunset-red);color:#fff;box-shadow:0 0 0 4px rgba(255,53,0,.15)}.record-state{min-width:120px;text-align:right;color:var(--muted);font-size:11px}
+.engineer-log-panel{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line-soft);border-top:2px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(8,27,42,.50),rgba(1,7,12,.40))}.engineer-notes{margin:0 0 14px}.engineer-note-entry{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px}.engineer-note-entry textarea{min-height:68px;resize:vertical;background:#071722;color:var(--starship-white);border:1px solid var(--line);border-radius:8px;padding:10px}.engineer-note-entry button{align-self:stretch;min-width:110px;border:1px solid var(--line);border-radius:8px;background:var(--alpha-blue);color:#071018;font-weight:900;cursor:pointer}.engineer-note-grid{width:100%;border-collapse:collapse}.engineer-note-grid th{background:#071b29;color:var(--arctic-ice);font-size:11px;text-align:left;padding:9px}.engineer-note-grid td{padding:9px;border-bottom:1px solid var(--line-soft);vertical-align:top}.engineer-note-grid td:first-child{width:180px;white-space:nowrap}.engineer-note-grid td:nth-child(2){width:180px;white-space:nowrap}.engineer-note-grid td:last-child{white-space:pre-wrap;overflow-wrap:anywhere}.engineer-log-panel b{color:var(--arctic-ice)}.engineer-log-panel small{color:var(--muted);margin-right:auto}.record-btn{width:38px;height:38px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--title-gold);color:#071018;cursor:pointer}.record-btn svg{width:20px;height:20px;fill:currentColor}.record-btn.recording{background:var(--sunset-red);color:#fff;box-shadow:0 0 0 4px rgba(255,53,0,.15)}.record-state{min-width:120px;text-align:right;color:var(--muted);font-size:11px}
 </style>
 </head>
 <body>
@@ -40,6 +40,11 @@
       <small>Record a spoken engineering note and attach it to Diagnostics evidence.</small>
       <button id="engineerRecord" class="record-btn" type="button" title="Start Engineer's Log recording" aria-label="Start Engineer's Log recording"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2z"/></svg></button>
       <span id="engineerRecordState" class="record-state">READY</span>
+    </section>
+    <section class="engineer-notes panel">
+      <div class="sectiontitle">Engineer&#39;s Notes</div>
+      <div class="engineer-note-entry"><textarea id="engineerNoteText" maxlength="4000" placeholder="Add a persistent engineering note..."></textarea><button id="engineerNoteSave" type="button">Add Note</button></div>
+      <table class="engineer-note-grid"><thead><tr><th>Date / Time</th><th>Engineer</th><th>Note</th></tr></thead><tbody id="engineerNotesBody"><tr><td colspan="3" class="muted">Loading notes…</td></tr></tbody></table>
     </section>
     <div class="sectiontitle">Operational V2 Evidence</div><section id="v2evidence" class="runs"><div class="run muted">Loading operational evidence…</div></section>
     <div class="sectiontitle">Engineering Runs</div><section id="runs" class="runs"><div class="run muted">Loading diagnostic history…</div></section>
@@ -77,6 +82,27 @@ async function toggleEngineerRecording(){
  }catch(e){state.textContent='MICROPHONE UNAVAILABLE';window.aegisAudio?.play('warning');}
 }
 document.addEventListener('click',e=>{if(e.target.closest('#engineerRecord'))toggleEngineerRecording();});
+async function loadEngineerNotes(){
+ const body=document.getElementById('engineerNotesBody');
+ try{
+  const r=await fetch(api+'/engineer-notes',{cache:'no-store'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const notes=await r.json();
+  body.innerHTML=notes.length?notes.map(n=>`<tr><td>${localDateTime(n.createdAtUtc)}</td><td>${esc(n.engineer)}</td><td>${esc(n.text)}</td></tr>`).join(''):'<tr><td colspan="3" class="muted">No engineering notes recorded.</td></tr>';
+ }catch(e){body.innerHTML='<tr><td colspan="3" class="muted">Unable to load engineering notes.</td></tr>';}
+}
+async function saveEngineerNote(){
+ const input=document.getElementById('engineerNoteText'),button=document.getElementById('engineerNoteSave');
+ const text=input.value.trim();if(!text)return;
+ button.disabled=true;
+ try{
+  const r=await fetch(api+'/engineer-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  if(!r.ok)throw new Error(await r.text());
+  input.value='';window.aegisAudio?.play('success');await loadEngineerNotes();
+ }catch(e){alert('Unable to save engineering note: '+e.message);window.aegisAudio?.play('critical');}
+ finally{button.disabled=false;}
+}
+document.getElementById('engineerNoteSave').addEventListener('click',saveEngineerNote);
 
 const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);return Number.isNaN(d.getTime())?String(v??'—'):d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'});};
 const localZone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -129,7 +155,7 @@ async function run(level){
  if(!r.ok){alert(await r.text());return;}await load();
 }
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>run(Number(b.dataset.level)));
-(async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([load(),loadV2()]);}catch{location.href='/login?returnUrl='+encodeURIComponent(location.pathname);}})();
-setInterval(()=>{load();loadV2();},30000);
+(async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([load(),loadV2(),loadEngineerNotes()]);}catch{location.href='/login?returnUrl='+encodeURIComponent(location.pathname);}})();
+setInterval(()=>{load();loadV2();loadEngineerNotes();},30000);
 </script>
 </body></html>

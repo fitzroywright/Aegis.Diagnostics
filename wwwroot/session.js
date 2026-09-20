@@ -28,6 +28,7 @@
     if (name) name.textContent = identity.displayName || identity.userName || 'Signed in';
     if (title) title.textContent = identity.title || 'User';
     if (session) session.textContent = `Automatic sign-out after ${identity.idleTimeoutMinutes || 30} minutes of inactivity`;
+    const brandUser=document.getElementById('brandUser');if(brandUser)brandUser.textContent='User: '+(identity.displayName||identity.userName||'Signed in')+' · IP: '+(identity.clientIp||'unknown');
     return identity;
   }
 
@@ -127,3 +128,21 @@ async function refreshControlPlaneHealthBanner(){
   }
 }
 refreshControlPlaneHealthBanner();setInterval(refreshControlPlaneHealthBanner,30000);
+
+async function refreshRegisteredApplicationHealth(){
+  const host=document.querySelector('.detail-scroll');if(!host)return;
+  let banner=document.getElementById('registeredApplicationHealthBanner');
+  if(!banner){banner=document.createElement('section');banner.id='registeredApplicationHealthBanner';banner.className='control-plane-health-banner';const own=document.getElementById('controlPlaneHealthBanner')||document.getElementById('systemHealth');own?.insertAdjacentElement('afterend',banner)??host.prepend(banner);}
+  try{
+    const response=await fetch('/api/engineering/diagnostics/status',{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json(),observations=data.observations||[];
+    const issues=observations.filter(o=>!['healthy','passed'].includes(String(o.state||o.status||o.health||'unknown').toLowerCase()));
+    if(!issues.length){banner.style.display='none';return;}
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    banner.classList.toggle('critical',issues.some(o=>['unhealthy','failed','critical','error'].includes(String(o.state||o.status||o.health||'').toLowerCase())));
+    banner.innerHTML='<strong>REGISTERED APPLICATION HEALTH · '+issues.length+' ISSUE'+(issues.length===1?'':'S')+'</strong><div>'+issues.slice(0,8).map(o=>esc(o.applicationId||o.application||o.name||'Application')+' — '+esc(o.state||o.status||o.health||'Unknown')+(o.reason||o.summary||o.detail?' · '+esc(o.reason||o.summary||o.detail):'')).join('<br>')+(issues.length>8?'<br>+'+(issues.length-8)+' more':'')+'</div>';
+    banner.style.display='block';
+  }catch{banner.style.display='none';}
+}
+refreshRegisteredApplicationHealth();setInterval(refreshRegisteredApplicationHealth,30000);

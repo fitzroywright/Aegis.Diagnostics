@@ -137,10 +137,7 @@ internal static class DiagnosticsApi
     {
         if (!View(context)) return Results.Forbid();
 
-        string? operationsUrl =
-            configuration["Aegis:Operations:Url"] ??
-            configuration["AegisOperations:BaseUrl"] ??
-            configuration["Operations:Url"];
+        string? operationsUrl = configuration["Aegis:Operations:Url"];
 
         if (!Uri.TryCreate(operationsUrl, UriKind.Absolute, out Uri? baseUri))
             return Results.Problem(

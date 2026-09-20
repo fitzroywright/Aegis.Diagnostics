@@ -24,10 +24,10 @@
     timeoutMs = Math.max(5, Number(identity.idleTimeoutMinutes || 30)) * 60 * 1000;
     const name = document.getElementById('userName');
     const title = document.getElementById('userTitle');
-    const session = document.getElementById('sessionInfo');
+    const session = document.getElementById('sessionInfo');const brandUser=document.getElementById('brandUser');
     if (name) name.textContent = identity.displayName || identity.userName || 'Signed in';
     if (title) title.textContent = identity.title || 'User';
-    if (session) session.textContent = `Automatic sign-out after ${identity.idleTimeoutMinutes || 30} minutes of inactivity`;
+    if (session) session.textContent = `Automatic sign-out after ${identity.idleTimeoutMinutes || 30} minutes of inactivity`;if(brandUser)brandUser.textContent='User: '+(identity.displayName||identity.userName||'Signed in')+' · IP: '+(identity.clientIp||'unknown');
     const brandUser=document.getElementById('brandUser');if(brandUser)brandUser.textContent='User: '+(identity.displayName||identity.userName||'Signed in')+' · IP: '+(identity.clientIp||'unknown');
     return identity;
   }

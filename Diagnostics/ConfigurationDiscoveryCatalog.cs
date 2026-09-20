@@ -61,18 +61,33 @@ public sealed class ConfigurationDiscoveryCatalog(
 
         try
         {
-            ISecretProvider secrets = CommonSecretProviderFactory.Create(configuration);
-            string registrationSecretPath = $"configuration/registration/{options.ApplicationId}";
-            string? credential = await secrets.GetAsync(registrationSecretPath, cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(credential))
+            string credentialFile = configuration["Aegis:Registration:CredentialFile"]?.Trim()
+                ?? "/var/lib/aegis/diagnostics/registration.key";
+            if (!File.Exists(credentialFile))
             {
-                SetError($"Configuration discovery credential '{registrationSecretPath}' is unavailable.");
+                SetError($"Diagnostics control-plane registration credential is missing at '{credentialFile}'.");
                 return;
             }
 
+            string credential = (await File.ReadAllTextAsync(credentialFile, cancellationToken).ConfigureAwait(false)).Trim();
+            if (string.IsNullOrWhiteSpace(credential))
+            {
+                SetError("Diagnostics control-plane registration credential is empty.");
+                return;
+            }
+
+            string instanceId =
+                options.InstanceId?.Trim() ??
+                configuration["Service:Identity"]?.Trim() ??
+                Environment.MachineName;
+
             HttpClient client = httpClientFactory.CreateClient("configuration-discovery");
             using HttpRequestMessage request = new(HttpMethod.Get, new Uri(configurationUri, "/api/contracts/discovery"));
-            request.Headers.TryAddWithoutValidation("X-Aegis-Registration-Key", credential);
+            request.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", credential);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Application-Id", options.ApplicationId);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Instance-Id", instanceId);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Correlation-Id", Guid.NewGuid().ToString("N"));
             using HttpResponseMessage response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {

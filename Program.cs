@@ -38,10 +38,17 @@ builder.Services.AddSingleton<DiagnosticOrchestrationService>();
 builder.Services.AddSuiteSecurity();
 
 WebApplication app = builder.Build();
-string operationsPublicUrl = builder.Configuration["Aegis:Operations:PublicUrl"]?.Trim()
-    ?? "https://operations.ffpja.org";
-string configurationPublicUrl = builder.Configuration["Aegis:Configuration:PublicUrl"]?.Trim()
-    ?? "https://config.ffpja.org";
+ILogger endpointLogger = app.Services.GetRequiredService<ILoggerFactory>()
+    .CreateLogger("Aegis.Diagnostics.ControlPlane");
+
+string operationsPublicUrl = AegisControlPlaneEndpoints.ResolvePublic(
+    builder.Configuration,
+    AegisControlPlaneService.Operations,
+    endpointLogger);
+string configurationPublicUrl = AegisControlPlaneEndpoints.ResolvePublic(
+    builder.Configuration,
+    AegisControlPlaneService.Configuration,
+    endpointLogger);
 app.MapSuiteSecurity(operationsPublicUrl, configurationPublicUrl);
 app.UseSuiteSecurity();
 app.UseDefaultFiles();

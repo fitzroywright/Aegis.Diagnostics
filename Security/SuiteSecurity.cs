@@ -55,8 +55,16 @@ internal sealed class SuiteSecurity(IConfiguration configuration, IHostEnvironme
 
         if (result?.IsAuthenticated != true) return null;
         string[] permissions = result.IsAdministrative
-            ? ["Diagnostics.View", "Diagnostics.Run", "Diagnostics.Repair", "Diagnostics.Critical", "Security.Manage"]
-            : ["Diagnostics.View"];
+            ? [
+                "Operations.View",
+                "Configuration.View",
+                "Diagnostics.View",
+                "Diagnostics.Run",
+                "Diagnostics.Repair",
+                "Diagnostics.Critical",
+                "Security.Manage"
+              ]
+            : ["Operations.View", "Configuration.View", "Diagnostics.View"];
         return new SuiteIdentity(userName, result.UserInfo?.DisplayName ?? userName, result.UserInfo?.Title ?? "User", permissions);
     }
 

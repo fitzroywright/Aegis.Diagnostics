@@ -85,6 +85,42 @@ internal static class DiagnosticsApi
         app.MapPost("/api/engineering/diagnostics/runs/{runId:guid}/resolve", ResolveRunAsync);
         app.MapGet("/api/engineering/diagnostics/activity", ProxyOperationsActivityAsync);
         app.MapGet("/api/engineering/diagnostics/logs", ProxyOperationsLogsAsync);
+        app.MapPost("/api/engineering/diagnostics/engineer-log", async (
+            HttpContext context,
+            IConfiguration configuration,
+            CancellationToken ct) =>
+        {
+            if (!Has(context, "Diagnostics.Run")) return Results.Forbid();
+            if (!context.Request.HasFormContentType) return Results.BadRequest(new { error = "Multipart form data is required." });
+
+            IFormCollection form = await context.Request.ReadFormAsync(ct);
+            IFormFile? audio = form.Files.GetFile("audio");
+            if (audio is null || audio.Length == 0) return Results.BadRequest(new { error = "Audio recording is required." });
+            if (audio.Length > 25 * 1024 * 1024) return Results.BadRequest(new { error = "Recording exceeds the 25 MB limit." });
+
+            string root = configuration["Diagnostics:EngineerLogPath"]?.Trim()
+                ?? Path.Combine(AppContext.BaseDirectory, "data", "engineer-logs");
+            Directory.CreateDirectory(root);
+
+            string operatorName = OperatorName(context);
+            string safeOperator = string.Concat(operatorName.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_'));
+            string extension = audio.ContentType.Contains("ogg", StringComparison.OrdinalIgnoreCase) ? ".ogg"
+                : audio.ContentType.Contains("wav", StringComparison.OrdinalIgnoreCase) ? ".wav"
+                : ".webm";
+            string fileName = $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{safeOperator}-{Guid.NewGuid():N}{extension}";
+            string path = Path.Combine(root, fileName);
+
+            await using FileStream stream = File.Create(path);
+            await audio.CopyToAsync(stream, ct);
+
+            return Results.Ok(new
+            {
+                fileName,
+                operatorName,
+                recordedAtUtc = DateTimeOffset.UtcNow,
+                bytes = audio.Length
+            });
+        });
     }
 
     static bool Machine(HttpContext c)=>c.Items.TryGetValue("DiagnosticsMachineAuthorized",out object? value)&&value is true;

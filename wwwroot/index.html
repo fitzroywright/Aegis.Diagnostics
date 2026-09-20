@@ -11,7 +11,7 @@
   <div class="left-vertical"></div><div class="left-gold"></div><div class="bottom-arm"></div><div class="join-dot"></div>
   <div class="brand"><div class="section">Diagnostics</div><div class="org">Food For The Poor Jamaica</div><div class="datetime" id="brandDateTime"></div></div>
   <div class="live-log" id="liveLog"><div class="row"><span class="t">--:--:--</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> Loading health telemetry</div></div>
-  <div class="top-buttons"><a class="blue" href="https://operations.ffpja.org">Operations</a><a class="salmon" href="/">Diagnostics</a><a class="gold" href="https://config.ffpja.org">Configuration</a><a class="gray" href="https://config.ffpja.org/registration-lifecycle">Registration</a></div><div class="time" id="time"></div><small id="zone"></small></div>
+  <div class="top-buttons"><a class="blue" href="https://operations.ffpja.org">Operations</a><a class="salmon" href="/">Diagnostics</a><a class="gold" href="https://config.ffpja.org">Configuration</a><a class="gray" href="https://config.ffpja.org/registration-lifecycle">Registration</a></div>
 </header>
 
 <section class="workspace-shell">
@@ -38,7 +38,6 @@ async function get(path){return fetch(path,{cache:'no-store'});}
 async function load(){
  try{
   const h=await fetch('/health',{cache:'no-store'}).then(r=>r.json());
-   version.textContent=h.version?('v'+h.version):'version unavailable'; 
   updated.textContent=`SITE ${h.siteId||'—'} / INSTANCE ${h.instanceId||'—'} / LAST SCAN ${localDateTime(h.utc)}`;
   total.textContent=h.discoveredTargets??0; overall.textContent=String(h.health||h.status||'Unknown').toUpperCase(); overall.className=String(h.health||h.status||'Unknown');
   const r=await get(api+'/targets');

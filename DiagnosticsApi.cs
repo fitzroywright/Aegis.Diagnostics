@@ -137,11 +137,13 @@ internal static class DiagnosticsApi
     {
         if (!View(context)) return Results.Forbid();
 
-        string? operationsUrl = configuration["Aegis:Operations:Url"];
+        string operationsUrl = AegisControlPlaneEndpoints.ResolveInternal(
+            configuration,
+            AegisControlPlaneService.Operations);
 
         if (!Uri.TryCreate(operationsUrl, UriKind.Absolute, out Uri? baseUri))
             return Results.Problem(
-                "Diagnostics cannot read the suite activity stream because Aegis:Operations:Url is not configured.",
+                "Diagnostics cannot read the suite activity stream because the resolved Operations endpoint is invalid.",
                 statusCode: StatusCodes.Status503ServiceUnavailable);
 
         var target = new Uri(

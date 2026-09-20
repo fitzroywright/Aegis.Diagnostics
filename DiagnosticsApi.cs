@@ -150,9 +150,33 @@ internal static class DiagnosticsApi
 
         try
         {
+            string credentialFile = configuration["Aegis:Registration:CredentialFile"]?.Trim()
+                ?? "/var/lib/aegis/diagnostics/registration.key";
+            if (!File.Exists(credentialFile))
+                return Results.Problem(
+                    "Diagnostics cannot authenticate to Operations because its control-plane registration credential is missing.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+
+            string credential = (await File.ReadAllTextAsync(credentialFile, ct).ConfigureAwait(false)).Trim();
+            if (string.IsNullOrWhiteSpace(credential))
+                return Results.Problem(
+                    "Diagnostics cannot authenticate to Operations because its control-plane registration credential is empty.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+
+            string instanceId =
+                configuration["Diagnostics:InstanceId"]?.Trim() ??
+                configuration["Service:Identity"]?.Trim() ??
+                Environment.MachineName;
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, target);
+            request.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", credential);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Application-Id", "Aegis.Diagnostics");
+            request.Headers.TryAddWithoutValidation("X-Aegis-Instance-Id", instanceId);
+
             HttpClient client = factory.CreateClient("operations-activity");
             using HttpResponseMessage response =
-                await client.GetAsync(target, ct).ConfigureAwait(false);
+                await client.SendAsync(request, ct).ConfigureAwait(false);
 
             string body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             return Results.Content(

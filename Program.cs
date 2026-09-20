@@ -1,5 +1,6 @@
 using Aegis.Diagnostics;
 using Common.Diagnostics;
+using Common.Registration;
 using Common.Secrets;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,12 @@ if (string.IsNullOrWhiteSpace(diagnosticsOptions.EnvironmentName))
 {
     diagnosticsOptions.EnvironmentName = builder.Environment.EnvironmentName;
 }
+string operationsLogInstanceId = diagnosticsOptions.InstanceId?.Trim()
+    ?? builder.Configuration["Service:Identity"]?.Trim()
+    ?? Environment.MachineName;
+string operationsLogCredentialFile = builder.Configuration["Aegis:Registration:CredentialFile"]?.Trim()
+    ?? "/var/lib/aegis/diagnostics/registration.key";
+builder.Services.AddAegisControlPlaneOperationsLogging(builder.Configuration, "Aegis.Diagnostics", operationsLogInstanceId, operationsLogCredentialFile, diagnosticsOptions.EnvironmentName);
 builder.Services.AddSingleton(diagnosticsOptions);
 builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient("configuration-discovery", client => client.Timeout = TimeSpan.FromSeconds(10));

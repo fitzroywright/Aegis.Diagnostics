@@ -71,3 +71,37 @@
     }
   }, 60 * 1000);
 })();
+
+
+function installAegisConsoleAudio(){
+  const key='aegis.console.sound',enabled=()=>localStorage.getItem(key)!=='off';
+  let ctx=null;
+  function tone(freq,duration,volume=.045,delay=0){
+    if(!enabled())return;
+    try{
+      ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+      if(ctx.state==='suspended')ctx.resume();
+      const t=ctx.currentTime+delay,o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='sine';o.frequency.setValueAtTime(freq,t);
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(volume,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+duration);
+      o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+duration+.02);
+    }catch{}
+  }
+  const cues={
+    navigation:()=>{tone(1046.5,.026,.035);tone(1318.5,.031,.03,.035)},
+    success:()=>{tone(659.3,.035,.035);tone(987.8,.04,.038,.047);tone(1318.5,.043,.032,.097)},
+    warning:()=>{tone(587.3,.06,.045);tone(493.9,.072,.045,.095)},
+    critical:()=>{tone(392,.08,.055);tone(329.6,.085,.055,.11);tone(261.6,.115,.06,.225)},
+    complete:()=>{tone(784,.045,.032);tone(932.3,.045,.032,.05);tone(1174.7,.035,.03,.105)}
+  };
+  window.aegisAudio={play:name=>cues[name]?.(),enabled};
+  const arm=document.querySelector('.workspace-arm');
+  if(arm&&!document.getElementById('soundToggle')){
+    const b=document.createElement('button');b.id='soundToggle';b.type='button';b.className='sound-toggle';
+    const paint=()=>{b.textContent=enabled()?'SOUND ON':'SOUND OFF';b.setAttribute('aria-pressed',String(enabled()))};paint();
+    b.onclick=()=>{localStorage.setItem(key,enabled()?'off':'on');paint();if(enabled())cues.success()};
+    arm.appendChild(b);
+  }
+  document.querySelectorAll('.top-buttons a,.workspace-nav a,.lcars-back').forEach(x=>x.addEventListener('pointerdown',()=>cues.navigation()));
+}
+installAegisConsoleAudio();

@@ -2,6 +2,7 @@ namespace Aegis.Diagnostics;
 
 using System.Net.Http.Json;
 using Common.Secrets;
+using Common.Registration;
 
 public interface IDiagnosticTargetCatalog
 {
@@ -48,10 +49,13 @@ public sealed class ConfigurationDiscoveryCatalog(
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        string? baseUrl = configuration["Aegis:Configuration:Url"];
+        string baseUrl = AegisControlPlaneEndpoints.ResolveInternal(
+            configuration,
+            AegisControlPlaneService.Configuration,
+            logger);
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? configurationUri))
         {
-            SetError("Aegis:Configuration:Url is not configured as an absolute URL.");
+            SetError("Resolved Configuration endpoint is not an absolute URL.");
             return;
         }
 

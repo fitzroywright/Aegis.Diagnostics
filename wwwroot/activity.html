@@ -27,7 +27,7 @@
 </header>
 
 <section class="workspace-shell">
-  <div class="workspace-arm"><div class="workspace-title">Suite Activity Log</div></div><div class="workspace-leg"></div>
+  <div class="workspace-arm"><div class="workspace-title">Suite Activity Log</div><div class="last-scan" id="lastScan">Last Scan: SCANNING</div></div><div class="workspace-leg"></div>
   <nav class="workspace-nav"><a href="/">Health</a><a class="active" href="/activity.html">Activity</a><a href="/console.html">Engineering</a></nav>
   <button class="lcars-back" type="button" onclick="if(history.length>1){history.back()}else{location.href='/'}">Back</button>
   <main class="detail-scroll">
@@ -86,7 +86,7 @@ async function refresh(){
    const x=await r.json();let events=x.events||[];
    if(hiddenBefore)events=events.filter(e=>new Date(e.occurredAtUtc||e.timestampUtc)>hiddenBefore);
    $('view').innerHTML=events.length?events.map(mode==='activity'?rowActivity:rowLog).join(''):'<div class="empty">No events match this filter.</div>';
-   $('state').textContent=events.length+' EVENTS · '+new Date().toLocaleTimeString();
+   $('state').textContent=events.length+' EVENTS · '+new Date().toLocaleTimeString();$('lastScan').textContent='Last Scan: '+new Date().toLocaleString();
    liveLog.innerHTML=events.slice(-4).map(e=>'<div class="row"><span class="t">'+fmt(e.occurredAtUtc||e.timestampUtc)+'</span> <span class="inf">INF</span> <span class="src">['+esc(e.applicationId)+']</span> '+esc(e.detail||e.message||e.stage||'Event')+'</div>').join('')||'<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Activity]</span> No matching events</div>';
    if(followTail)$('view').scrollTop=$('view').scrollHeight;
  }catch(e){$('state').textContent='ACTIVITY UNAVAILABLE · '+e.message}

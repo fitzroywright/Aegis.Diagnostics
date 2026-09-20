@@ -201,7 +201,7 @@ internal static class SuiteSecurityExtensions
             return Results.Redirect(SafeLocal(returnUrl) ? returnUrl : "/");
         });
 
-        app.MapGet("/handoff/{target}", (string target, HttpContext context, SuiteSecurity security) =>
+        app.MapGet("/handoff/{target}", (string target, string? returnUrl, HttpContext context, SuiteSecurity security) =>
         {
             SuiteIdentity? identity = security.Read(context.Request);
             if (identity is null)
@@ -210,7 +210,7 @@ internal static class SuiteSecurityExtensions
             string audience;
             string url;
             string permission;
-            string returnUrl = "/";
+            string destination = SafeLocal(returnUrl ?? string.Empty) ? returnUrl! : "/";
 
             if (target.Equals("operations", StringComparison.OrdinalIgnoreCase))
             {
@@ -229,7 +229,7 @@ internal static class SuiteSecurityExtensions
                 audience = "Aegis.Configuration";
                 url = configurationPublicUrl;
                 permission = "Configuration.View";
-                returnUrl = "/registration-lifecycle";
+                destination = "/registration-lifecycle";
             }
             else
             {
@@ -241,8 +241,8 @@ internal static class SuiteSecurityExtensions
 
             string action = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(url.TrimEnd('/') + "/auth/handoff");
             string token = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(security.CreateHandoff(identity, audience));
-            string destination = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(returnUrl);
-            string html = $"""<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Opening {System.Text.Encodings.Web.HtmlEncoder.Default.Encode(target)}</title></head><body><form id="handoff" method="post" action="{action}"><input type="hidden" name="token" value="{token}"><input type="hidden" name="returnUrl" value="{destination}"></form><script>history.replaceState(null,'','/');document.getElementById('handoff').submit();</script><noscript><button form="handoff" type="submit">Continue</button></noscript></body></html>""";
+            string encodedDestination = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(destination);
+            string html = $"""<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Opening {System.Text.Encodings.Web.HtmlEncoder.Default.Encode(target)}</title></head><body><form id="handoff" method="post" action="{action}"><input type="hidden" name="token" value="{token}"><input type="hidden" name="returnUrl" value="{encodedDestination}"></form><script>history.replaceState(null,'','/');document.getElementById('handoff').submit();</script><noscript><button form="handoff" type="submit">Continue</button></noscript></body></html>""";
             context.Response.Headers.CacheControl = "no-store";
             context.Response.Headers.Pragma = "no-cache";
             context.Response.Headers["Referrer-Policy"] = "no-referrer";

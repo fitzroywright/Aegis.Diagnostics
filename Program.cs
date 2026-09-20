@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Aegis.Diagnostics;
 using Common.Diagnostics;
 using Common.Registration;
@@ -38,6 +39,10 @@ builder.Services.AddSingleton<DiagnosticOrchestrationService>();
 builder.Services.AddSuiteSecurity();
 
 WebApplication app = builder.Build();
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 ILogger endpointLogger = app.Services.GetRequiredService<ILoggerFactory>()
     .CreateLogger("Aegis.Diagnostics.ControlPlane");
 

@@ -2,6 +2,9 @@ using Aegis.Diagnostics;
 using Common.Diagnostics;
 using Common.Registration;
 
+internal sealed record EngineerNoteRequest(string? Text);
+internal sealed record EngineerNote(Guid Id, DateTimeOffset CreatedAtUtc, string Engineer, string Text);
+
 internal static class DiagnosticsApi
 {
     internal static void MapDiagnosticsApi(this WebApplication app, DiagnosticsOptions options)
@@ -120,6 +123,69 @@ internal static class DiagnosticsApi
                 recordedAtUtc = DateTimeOffset.UtcNow,
                 bytes = audio.Length
             });
+        });
+
+        app.MapGet("/api/engineering/diagnostics/engineer-notes", async (
+            HttpContext context,
+            IConfiguration configuration,
+            CancellationToken ct) =>
+        {
+            if (!View(context)) return Results.Forbid();
+
+            string root = configuration["Diagnostics:EngineerLogPath"]?.Trim()
+                ?? Path.Combine(AppContext.BaseDirectory, "data", "engineer-logs");
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, "engineer-notes.json");
+
+            if (!File.Exists(path))
+                return Results.Ok(Array.Empty<object>());
+
+            await using FileStream stream = File.OpenRead(path);
+            EngineerNote[]? notes = await System.Text.Json.JsonSerializer.DeserializeAsync<EngineerNote[]>(stream, cancellationToken: ct);
+            return Results.Ok((notes ?? []).OrderByDescending(x => x.CreatedAtUtc));
+        });
+
+        app.MapPost("/api/engineering/diagnostics/engineer-notes", async (
+            HttpContext context,
+            IConfiguration configuration,
+            CancellationToken ct) =>
+        {
+            if (!Has(context, "Diagnostics.Run")) return Results.Forbid();
+
+            EngineerNoteRequest? request = await context.Request.ReadFromJsonAsync<EngineerNoteRequest>(cancellationToken: ct);
+            string text = request?.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text))
+                return Results.BadRequest(new { error = "Note text is required." });
+            if (text.Length > 4000)
+                return Results.BadRequest(new { error = "Note text exceeds the 4000 character limit." });
+
+            string root = configuration["Diagnostics:EngineerLogPath"]?.Trim()
+                ?? Path.Combine(AppContext.BaseDirectory, "data", "engineer-logs");
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, "engineer-notes.json");
+
+            var notes = new List<EngineerNote>();
+            if (File.Exists(path))
+            {
+                await using FileStream read = File.OpenRead(path);
+                EngineerNote[]? existing = await System.Text.Json.JsonSerializer.DeserializeAsync<EngineerNote[]>(read, cancellationToken: ct);
+                if (existing is not null) notes.AddRange(existing);
+            }
+
+            var note = new EngineerNote(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                OperatorName(context),
+                text);
+
+            notes.Add(note);
+
+            string temp = path + ".tmp";
+            await using (FileStream write = File.Create(temp))
+                await System.Text.Json.JsonSerializer.SerializeAsync(write, notes, cancellationToken: ct);
+            File.Move(temp, path, true);
+
+            return Results.Ok(note);
         });
     }
 

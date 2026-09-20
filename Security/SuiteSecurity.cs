@@ -260,6 +260,7 @@ internal static class SuiteSecurityExtensions
                 identity.DisplayName,
                 identity.Title,
                 identity.Permissions,
+                clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 idleTimeoutMinutes = security.IdleTimeoutMinutes
             });
         });

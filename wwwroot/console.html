@@ -16,6 +16,7 @@
 .level[data-level="3"]:hover{box-shadow:inset 0 0 0 1px #ffcc6666}
 .level[data-level="2"]:hover{box-shadow:inset 0 0 0 1px #ff8a3d66}
 .level[data-level="1"]:hover{box-shadow:inset 0 0 0 1px #ff350066}
+.engineer-log-panel{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line-soft);border-top:2px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(8,27,42,.50),rgba(1,7,12,.40))}.engineer-log-panel b{color:var(--arctic-ice)}.engineer-log-panel small{color:var(--muted);margin-right:auto}.record-btn{width:38px;height:38px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--title-gold);color:#071018;cursor:pointer}.record-btn svg{width:20px;height:20px;fill:currentColor}.record-btn.recording{background:var(--sunset-red);color:#fff;box-shadow:0 0 0 4px rgba(255,53,0,.15)}.record-state{min-width:120px;text-align:right;color:var(--muted);font-size:11px}
 </style>
 </head>
 <body>
@@ -34,6 +35,12 @@
     <section class="page-head"><div><p>Progressive engineering diagnostics from Level 5 scan through Level 1 critical intervention</p><div id="accessSummary" class="muted">Checking permissions…</div></div></section>
     <section class="levels"><button class="level" data-level="5"><b>LEVEL 5</b>SCAN<small>Broad health scan</small></button><button class="level" data-level="4"><b>LEVEL 4</b>ANALYSIS<small>Deeper diagnostic analysis</small></button><button class="level" data-level="3"><b>LEVEL 3</b>VERIFICATION<small>Targeted verification</small></button><button class="level" data-level="2"><b>LEVEL 2</b>REPAIR<small>Controlled repair action</small></button><button class="level" data-level="1"><b>LEVEL 1</b>CRITICAL<small>Critical intervention</small></button></section>
     <section class="reason-panel"><label for="reason">Engineering reason / incident context</label><textarea id="reason" placeholder="Required for Levels 2 and 1"></textarea></section>
+    <section class="engineer-log-panel">
+      <b>Engineer&#39;s Log</b>
+      <small>Record a spoken engineering note and attach it to Diagnostics evidence.</small>
+      <button id="engineerRecord" class="record-btn" type="button" title="Start Engineer's Log recording" aria-label="Start Engineer's Log recording"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H8v2h8v-2h-3v-3.08A7 7 0 0 0 19 11h-2z"/></svg></button>
+      <span id="engineerRecordState" class="record-state">READY</span>
+    </section>
     <div class="sectiontitle">Operational V2 Evidence</div><section id="v2evidence" class="runs"><div class="run muted">Loading operational evidence…</div></section>
     <div class="sectiontitle">Engineering Runs</div><section id="runs" class="runs"><div class="run muted">Loading diagnostic history…</div></section>
   </main>
@@ -42,6 +49,35 @@
 <script src="/session.js"></script>
 <script>
 const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason'),v2evidence=document.getElementById('v2evidence');
+let engineerRecorder=null,engineerChunks=[],engineerStream=null;
+async function toggleEngineerRecording(){
+ const button=document.getElementById('engineerRecord'),state=document.getElementById('engineerRecordState');
+ if(engineerRecorder&&engineerRecorder.state==='recording'){engineerRecorder.stop();return;}
+ try{
+  engineerStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  engineerChunks=[];
+  engineerRecorder=new MediaRecorder(engineerStream);
+  engineerRecorder.ondataavailable=e=>{if(e.data&&e.data.size)engineerChunks.push(e.data)};
+  engineerRecorder.onstop=async()=>{
+   button.classList.remove('recording');button.title="Start Engineer's Log recording";button.setAttribute('aria-label',button.title);
+   engineerStream?.getTracks().forEach(t=>t.stop());engineerStream=null;
+   const blob=new Blob(engineerChunks,{type:engineerRecorder.mimeType||'audio/webm'});
+   state.textContent='UPLOADING…';
+   try{
+    const form=new FormData();form.append('audio',blob,'engineer-log.webm');
+    const response=await fetch(api+'/engineer-log',{method:'POST',body:form});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const saved=await response.json();
+    state.textContent='SAVED '+new Date(saved.recordedAtUtc).toLocaleTimeString();
+    window.aegisAudio?.play('success');
+   }catch(e){state.textContent='SAVE FAILED';window.aegisAudio?.play('critical');}
+  };
+  engineerRecorder.start();
+  button.classList.add('recording');button.title="Stop Engineer's Log recording";button.setAttribute('aria-label',button.title);state.textContent='RECORDING…';window.aegisAudio?.play('navigation');
+ }catch(e){state.textContent='MICROPHONE UNAVAILABLE';window.aegisAudio?.play('warning');}
+}
+document.addEventListener('click',e=>{if(e.target.closest('#engineerRecord'))toggleEngineerRecording();});
+
 const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);return Number.isNaN(d.getTime())?String(v??'—'):d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'});};
 const localZone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
 function recentStamp(v){const d=v?new Date(v):new Date();if(Number.isNaN(d.getTime()))return '--- -- ---- --:--:--';const mon=d.toLocaleString('en-US',{month:'short'});return mon+' '+String(d.getDate()).padStart(2,'0')+' '+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0')}

@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Activity · Diagnostics</title>
+<link rel="stylesheet" href="/lcars.css">
+<style>
+.activity-toolbar{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:8px;margin:12px 0}
+.activity-toolbar input,.activity-toolbar select{background:#03131d;color:#eaf6ff;border:1px solid #2a668d;border-radius:6px;padding:9px}
+.activity-tabs{display:flex;gap:8px;margin:8px 0 12px}.activity-tabs button{border:0;border-radius:16px;padding:8px 14px;font-weight:800;cursor:pointer;background:#314654;color:#fff}.activity-tabs button.active{background:#e7b94f;color:#050505}
+.activity-actions{display:flex;gap:8px;align-items:center;margin:8px 0}.activity-actions button{border:0;border-radius:14px;padding:7px 12px;font-weight:800;cursor:pointer}.activity-actions span{margin-left:auto}
+.activity-panel{border:1px solid #235a7c;border-radius:8px;background:#03090d;overflow:hidden}
+.activity-log{height:calc(100vh - 360px);min-height:420px;overflow:auto}
+.activity-row{display:grid;grid-template-columns:120px 170px 140px 110px 1fr;gap:10px;padding:7px 10px;border-bottom:1px solid #102430;align-items:center}
+.activity-row:hover{background:#0a1720}.activity-row .time{color:#8ca2b1}.activity-row .app{color:#8fd0fb}.activity-row .flow{color:#d8aff7}.activity-row .detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.Information,.Started{color:#8fd0fb}.Debug,.Trace{color:#8ca2b1}.Warning{color:#e7b94f}.Error,.Critical,.Failed{color:#f16f69}.Succeeded{color:#78d99b}.empty{padding:36px;text-align:center;color:#8ca2b1}
+@media(max-width:950px){.activity-toolbar{grid-template-columns:repeat(2,1fr)}.activity-row{grid-template-columns:95px 1fr 100px}.activity-row .flow,.activity-row .detail{display:none}}
+</style>
+</head>
+<body>
+<header class="lcars-top">
+  <div class="left-vertical"></div><div class="left-gold"></div><div class="bottom-arm"></div><div class="join-dot"></div>
+  <div class="brand"><div class="section">Diagnostics</div><div class="org">Food For The Poor Jamaica</div><div class="datetime" id="brandDateTime"></div></div>
+  <div class="live-log" id="liveLog"><div class="row"><span class="t">--:--:--</span> <span class="inf">INF</span> <span class="src">[Activity]</span> Connecting to centralized suite telemetry</div></div>
+  <div class="top-buttons"><a class="blue" href="https://operations.ffpja.org">Operations</a><a class="salmon" href="/">Diagnostics</a><a class="gold" href="https://config.ffpja.org">Configuration</a><a class="gray" href="https://config.ffpja.org/registration-lifecycle">Registration</a></div>
+</header>
+
+<section class="workspace-shell">
+  <div class="workspace-arm"><div class="workspace-title">Activity</div></div><div class="workspace-leg"></div>
+  <nav class="workspace-nav"><a href="/">Health</a><a class="active" href="/activity.html">Activity</a><a href="/console.html">Engineering</a></nav>
+  <main class="detail-scroll">
+    <section class="page-head"><div><h1>Suite Activity Log</h1><p>Live centralized lifecycle and application logs from registered Aegis applications</p></div><a class="primary" href="https://operations.ffpja.org/activity">Flow Analyzer</a></section>
+
+    <div class="activity-tabs"><button id="activityTab" class="active">Activity Log</button><button id="logsTab">Application Logs</button></div>
+
+    <section class="activity-toolbar">
+      <input id="application" placeholder="Application">
+      <input id="instance" placeholder="Instance">
+      <input id="flow" placeholder="Flow / Category">
+      <select id="level"><option value="">All Levels</option><option>Trace</option><option>Debug</option><option>Information</option><option>Warning</option><option>Error</option><option>Critical</option></select>
+      <input id="correlation" placeholder="Correlation ID">
+      <input id="minutes" type="number" min="1" max="10080" value="60" placeholder="Minutes">
+      <input id="text" style="grid-column:span 2" placeholder="Search message, stage, code, detail…">
+      <button id="apply" class="primary">Apply</button>
+      <button id="reset">Reset</button>
+    </section>
+
+    <div class="activity-actions">
+      <button id="pause">Pause</button>
+      <button id="follow">Follow Tail: On</button>
+      <button id="clear">Clear View</button>
+      <span id="state" class="muted">CONNECTING…</span>
+    </div>
+
+    <section class="activity-panel"><div id="view" class="activity-log"></div></section>
+  </main>
+</section>
+
+<script src="/session.js"></script>
+<script>
+const api='/api/engineering/diagnostics', $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+let mode='activity',paused=false,followTail=true,hiddenBefore=null;
+function updateBrandClock(){const d=new Date(),target=document.getElementById('brandDateTime');if(!target)return;const month=d.toLocaleString('en-US',{month:'short'}).toUpperCase(),day=String(d.getDate()).padStart(2,'0'),year=d.getFullYear(),hours=String(d.getHours()).padStart(2,'0'),minutes=String(d.getMinutes()).padStart(2,'0'),tt=d.getHours()>=12?'PM':'AM';target.textContent=month+' '+day+' '+year+' '+hours+':'+minutes+' '+tt;}updateBrandClock();setInterval(updateBrandClock,1000);
+function fmt(v){const d=new Date(v);return Number.isNaN(d.valueOf())?'—':d.toLocaleTimeString(undefined,{hour12:false})+'.'+String(d.getMilliseconds()).padStart(3,'0')}
+function params(){
+ const p=new URLSearchParams(),app=$('application').value.trim(),inst=$('instance').value.trim(),corr=$('correlation').value.trim(),text=$('text').value.trim(),m=parseInt($('minutes').value||'0',10);
+ if(app)p.set('applicationId',app);if(inst)p.set('instanceId',inst);if(corr)p.set('correlationId',corr);if(text)p.set('text',text);if(m>0)p.set('since',new Date(Date.now()-m*60000).toISOString());p.set('take','1500');
+ if(mode==='activity'){const flow=$('flow').value.trim();if(flow)p.set('flow',flow)}
+ else {const cat=$('flow').value.trim(),lvl=$('level').value.trim();if(cat)p.set('category',cat);if(lvl)p.set('level',lvl)}
+ return p;
+}
+function rowActivity(e){const detail=[e.stage,e.code,e.detail].filter(Boolean).join(' · ');return '<div class="activity-row"><span class="time">'+fmt(e.occurredAtUtc)+'</span><span class="app">'+esc(e.applicationId)+'</span><span class="flow">'+esc(e.flow)+'</span><span class="'+esc(e.outcome)+'">'+esc(e.outcome)+'</span><span class="detail" title="'+esc(detail)+'">'+esc(detail)+'</span></div>'}
+function rowLog(e){return '<div class="activity-row"><span class="time">'+fmt(e.timestampUtc)+'</span><span class="app">'+esc(e.applicationId)+'</span><span class="flow">'+esc(e.category)+'</span><span class="'+esc(e.level)+'">'+esc(e.level)+'</span><span class="detail" title="'+esc(e.message)+'">'+esc(e.message)+'</span></div>'}
+async function refresh(){
+ if(paused)return;
+ try{
+   const endpoint=mode==='activity'?'/activity':'/logs';
+   const r=await fetch(api+endpoint+'?'+params(),{cache:'no-store'});
+   if(r.status===401){location.href='/login?returnUrl='+encodeURIComponent(location.pathname);return}
+   if(!r.ok)throw new Error('HTTP '+r.status);
+   const x=await r.json();let events=x.events||[];
+   if(hiddenBefore)events=events.filter(e=>new Date(e.occurredAtUtc||e.timestampUtc)>hiddenBefore);
+   $('view').innerHTML=events.length?events.map(mode==='activity'?rowActivity:rowLog).join(''):'<div class="empty">No events match this filter.</div>';
+   $('state').textContent=events.length+' EVENTS · '+new Date().toLocaleTimeString();
+   liveLog.innerHTML=events.slice(-4).map(e=>'<div class="row"><span class="t">'+fmt(e.occurredAtUtc||e.timestampUtc)+'</span> <span class="inf">INF</span> <span class="src">['+esc(e.applicationId)+']</span> '+esc(e.detail||e.message||e.stage||'Event')+'</div>').join('')||'<div class="row"><span class="t">'+new Date().toLocaleTimeString('en-GB',{hour12:false})+'</span> <span class="inf">INF</span> <span class="src">[Activity]</span> No matching events</div>';
+   if(followTail)$('view').scrollTop=$('view').scrollHeight;
+ }catch(e){$('state').textContent='ACTIVITY UNAVAILABLE · '+e.message}
+}
+function tabs(){$('activityTab').classList.toggle('active',mode==='activity');$('logsTab').classList.toggle('active',mode==='logs');$('level').disabled=mode==='activity';$('flow').placeholder=mode==='activity'?'Flow':'Category'}
+$('activityTab').onclick=()=>{mode='activity';tabs();refresh()};$('logsTab').onclick=()=>{mode='logs';tabs();refresh()};
+$('apply').onclick=refresh;$('reset').onclick=()=>{for(const id of ['application','instance','flow','level','correlation','text'])$(id).value='';$('minutes').value='60';hiddenBefore=null;refresh()};
+$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Resume':'Pause';if(!paused)refresh()};
+$('follow').onclick=()=>{followTail=!followTail;$('follow').textContent='Follow Tail: '+(followTail?'On':'Off')};
+$('clear').onclick=()=>{hiddenBefore=new Date();$('view').innerHTML='<div class="empty">View cleared. New events will appear here.</div>'};
+tabs();refresh();setInterval(refresh,2000);
+</script>
+</body>
+</html>

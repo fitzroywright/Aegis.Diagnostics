@@ -3,7 +3,16 @@ using Common.Diagnostics;
 using Common.Registration;
 
 internal sealed record EngineerNoteRequest(string? Text);
-internal sealed record EngineerNote(Guid Id, DateTimeOffset CreatedAtUtc, string Engineer, string Text);
+internal sealed record EngineerNoteDispositionRequest(string? Action, string? Reason);
+internal sealed record EngineerNote(
+    Guid Id,
+    DateTimeOffset CreatedAtUtc,
+    string Engineer,
+    string Text,
+    string Status = "Active",
+    DateTimeOffset? DispositionAtUtc = null,
+    string? DispositionBy = null,
+    string? DispositionReason = null);
 
 internal static class DiagnosticsApi
 {
@@ -142,7 +151,24 @@ internal static class DiagnosticsApi
 
             await using FileStream stream = File.OpenRead(path);
             EngineerNote[]? notes = await System.Text.Json.JsonSerializer.DeserializeAsync<EngineerNote[]>(stream, cancellationToken: ct);
-            return Results.Ok((notes ?? []).OrderByDescending(x => x.CreatedAtUtc));
+            IEnumerable<object> visible = (notes ?? [])
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.CreatedAtUtc,
+                    x.Engineer,
+                    Text = string.Equals(x.Status, "Redacted", StringComparison.OrdinalIgnoreCase)
+                        ? "[REDACTED]"
+                        : string.Equals(x.Status, "Voided", StringComparison.OrdinalIgnoreCase)
+                            ? "[VOIDED] " + x.Text
+                            : x.Text,
+                    x.Status,
+                    x.DispositionAtUtc,
+                    x.DispositionBy,
+                    x.DispositionReason
+                });
+            return Results.Ok(visible);
         });
 
         app.MapPost("/api/engineering/diagnostics/engineer-notes", async (
@@ -186,6 +212,73 @@ internal static class DiagnosticsApi
             File.Move(temp, path, true);
 
             return Results.Ok(note);
+        });
+
+        app.MapPost("/api/engineering/diagnostics/engineer-notes/{noteId:guid}/disposition", async (
+            HttpContext context,
+            Guid noteId,
+            IConfiguration configuration,
+            CancellationToken ct) =>
+        {
+            if (!Has(context, "Security.Manage")) return Results.Forbid();
+
+            EngineerNoteDispositionRequest? request =
+                await context.Request.ReadFromJsonAsync<EngineerNoteDispositionRequest>(cancellationToken: ct);
+
+            string action = request?.Action?.Trim() ?? string.Empty;
+            string reason = request?.Reason?.Trim() ?? string.Empty;
+
+            if (action is not ("void" or "redact"))
+                return Results.BadRequest(new { error = "Action must be 'void' or 'redact'." });
+            if (string.IsNullOrWhiteSpace(reason))
+                return Results.BadRequest(new { error = "A reason is required." });
+            if (reason.Length > 1000)
+                return Results.BadRequest(new { error = "Reason exceeds the 1000 character limit." });
+
+            string root = configuration["Diagnostics:EngineerLogPath"]?.Trim()
+                ?? Path.Combine(AppContext.BaseDirectory, "data", "engineer-logs");
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, "engineer-notes.json");
+
+            if (!File.Exists(path))
+                return Results.NotFound(new { error = "Engineering note store does not exist." });
+
+            EngineerNote[]? existing;
+            await using (FileStream read = File.OpenRead(path))
+                existing = await System.Text.Json.JsonSerializer.DeserializeAsync<EngineerNote[]>(read, cancellationToken: ct);
+
+            var notes = (existing ?? []).ToList();
+            int index = notes.FindIndex(x => x.Id == noteId);
+            if (index < 0)
+                return Results.NotFound(new { error = "Engineering note not found." });
+
+            EngineerNote current = notes[index];
+            if (!string.Equals(current.Status, "Active", StringComparison.OrdinalIgnoreCase))
+                return Results.Conflict(new { error = $"Note is already {current.Status}." });
+
+            string status = action == "redact" ? "Redacted" : "Voided";
+            EngineerNote updated = current with
+            {
+                Status = status,
+                DispositionAtUtc = DateTimeOffset.UtcNow,
+                DispositionBy = OperatorName(context),
+                DispositionReason = reason
+            };
+            notes[index] = updated;
+
+            string temp = path + ".tmp";
+            await using (FileStream write = File.Create(temp))
+                await System.Text.Json.JsonSerializer.SerializeAsync(write, notes, cancellationToken: ct);
+            File.Move(temp, path, true);
+
+            return Results.Ok(new
+            {
+                updated.Id,
+                updated.Status,
+                updated.DispositionAtUtc,
+                updated.DispositionBy,
+                updated.DispositionReason
+            });
         });
     }
 

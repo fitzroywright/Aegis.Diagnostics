@@ -3,24 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>System Diagnostics</title>
+<title>Health · Diagnostics</title>
 <link rel="stylesheet" href="/lcars.css">
 </head>
 <body>
 <header class="lcars-top">
   <div class="left-vertical"></div><div class="left-gold"></div><div class="bottom-arm"></div><div class="join-dot"></div>
-  <div class="brand"><div class="aegis">Aegis LCARS</div><div class="section">Diagnostics</div><div class="org">Food For The Poor Jamaica</div></div>
+  <div class="brand"><div class="section">Diagnostics</div><div class="org">Food For The Poor Jamaica</div><div class="datetime" id="brandDateTime"></div></div>
   <div class="live-log" id="liveLog"><div class="row"><span class="t">--:--:--</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> Loading health telemetry</div></div>
-  <div class="current-system">
-    <div class="wave"><svg viewBox="0 0 48 48"><path d="M3 25h9l4-12 6 24 6-19 5 12 3-5h9"/></svg></div>
-    <div class="sys-meta"><strong>Aegis.Diagnostics</strong><span id="systemVersion">version unavailable</span><span id="site">—</span><div class="health"><i id="healthDot"></i><span id="healthText">SCANNING</span></div></div>
-  </div>
-  <div class="top-buttons"><button class="gold" onclick="load()">Refresh</button><a class="blue" href="/console.html">Engineering</a><a class="purple" href="/">Health</a><a class="gray" href="https://operations.ffpja.org">Operations</a></div>
-  <div class="clock"><div class="date" id="date"></div><div class="time" id="time"></div><small id="zone"></small></div>
+  <div class="top-buttons"><a class="blue" href="https://operations.ffpja.org">Operations</a><a class="salmon" href="/">Diagnostics</a><a class="gold" href="https://config.ffpja.org">Configuration</a><a class="gray" href="https://config.ffpja.org/registration-lifecycle">Registration</a></div><div class="time" id="time"></div><small id="zone"></small></div>
 </header>
 
 <section class="workspace-shell">
-  <div class="workspace-arm"></div><div class="workspace-leg"></div>
+  <div class="workspace-arm"><div class="workspace-title">Health</div></div><div class="workspace-leg"></div>
   <nav class="workspace-nav"><a class="active" href="/">Health</a><a href="/console.html">Engineering</a></nav>
   <main class="detail-scroll">
     <section class="page-head"><div><h1>Application Health</h1><p>Health, incidents and engineering diagnostics across registered applications</p></div><a class="primary" href="/console.html">Engineering Console</a></section>
@@ -31,29 +26,19 @@
   </main>
 </section>
 
-<div class="footer-wrap">
-  <footer class="footer-bar">
-    <a class="footer-item" href="https://operations.ffpja.org"><span class="footer-icon"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="10"/><path d="M16 6v4M16 22v4M6 16h4M22 16h4"/><circle cx="16" cy="16" r="3"/></svg></span><span><strong>Operations</strong><small>Monitor · Deploy · Manage</small></span></a>
-    <a class="footer-item" href="https://config.ffpja.org"><span class="footer-icon"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="5"/><path d="M16 3v5M16 24v5M3 16h5M24 16h5M7 7l4 4M21 21l4 4M25 7l-4 4M11 21l-4 4"/></svg></span><span><strong>Configuration</strong><small>Settings · Secrets · Registration</small></span></a>
-    <a class="footer-item active" href="/"><span class="footer-icon"><svg viewBox="0 0 32 32"><path d="M2 17h7l3-9 5 18 4-13 3 7h6"/></svg></span><span><strong>Diagnostics</strong><small>Health · Logs · Analysis</small></span></a>
-    <div class="footer-status"><span><i id="footerHealth"></i><b id="diagSummary">Diagnostics status unavailable</b></span></div>
-    <div class="footer-env">CONTROL PLANE</div>
-    <div class="footer-user"><span><b id="userName">Signed in</b><small id="userTitle">—</small><small id="sessionInfo"></small></span></div><div class="footer-logout"><button class="signout" data-signout>Sign Out</button></div>
-  </footer>
-  <div class="footer-meta">Aegis LCARS <span id="version">version from service</span> | Food For The Poor Jamaica</div><div class="footer-motto">Own what makes us different.</div>
-</div>
 <script src="/session.js"></script>
 <script>
 const api='/api/engineering/diagnostics';
 const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);return Number.isNaN(d.getTime())?String(v??'—'):d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'});};
 const localZone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
-const tick=()=>{const d=new Date();date.textContent=d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase();time.textContent=d.toLocaleTimeString('en-GB',{hour12:false});zone.textContent=localZone();};tick();setInterval(tick,1000);
+function updateBrandClock(){const d=new Date(),target=document.getElementById('brandDateTime');if(!target)return;const month=d.toLocaleString('en-US',{month:'short'}).toUpperCase(),day=String(d.getDate()).padStart(2,'0'),year=d.getFullYear(),hours=String(d.getHours()).padStart(2,'0'),minutes=String(d.getMinutes()).padStart(2,'0'),tt=d.getHours()>=12?'PM':'AM';target.textContent=month+' '+day+' '+year+' '+hours+':'+minutes+' '+tt;}updateBrandClock();setInterval(updateBrandClock,1000);
+document.querySelectorAll('.top-buttons a,.workspace-nav a').forEach(a=>a.addEventListener('pointerdown',()=>{a.classList.add('nav-flash');setTimeout(()=>a.classList.remove('nav-flash'),180)}));
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 async function get(path){return fetch(path,{cache:'no-store'});}
 async function load(){
  try{
   const h=await fetch('/health',{cache:'no-store'}).then(r=>r.json());
-  site.textContent=h.siteId||'—'; version.textContent=h.version?('v'+h.version):'version unavailable'; systemVersion.textContent=h.version?('v'+h.version):'version unavailable';
+   version.textContent=h.version?('v'+h.version):'version unavailable'; 
   updated.textContent=`SITE ${h.siteId||'—'} / INSTANCE ${h.instanceId||'—'} / LAST SCAN ${localDateTime(h.utc)}`;
   total.textContent=h.discoveredTargets??0; overall.textContent=String(h.health||h.status||'Unknown').toUpperCase(); overall.className=String(h.health||h.status||'Unknown');
   const r=await get(api+'/targets');
@@ -66,7 +51,7 @@ async function load(){
   const latest={}; for(const run of runs){const app=run.application||'';if(!latest[app]||new Date(run.completedAt)>new Date(latest[app].completedAt))latest[app]=run;}
   let counts={Healthy:0,Degraded:0,Unhealthy:0,Unknown:0};
   targets.innerHTML=ts.map(t=>{const run=latest[t.applicationId]||latest[t.name];let state='Unknown';if(run){const s=typeof run.status==='number'?run.status:String(run.status);state=(s===1||s==='Passed')?'Healthy':(s===2||s==='Warning')?'Degraded':'Unhealthy';}counts[state]++;return `<article class="card"><small>${esc(t.applicationId||'')}</small><h2>${esc(t.name)}</h2><b class="${state}">${state}</b><p class="muted">Site ${esc(t.siteId||'—')} / Instance ${esc(t.instanceId||'—')}</p><p>${run?'Last diagnostic '+localDateTime(run.completedAt):'No diagnostic run recorded'}</p><a href="/console.html">View Diagnostics →</a></article>`}).join('');
-  healthy.textContent=counts.Healthy;degraded.textContent=counts.Degraded;unhealthy.textContent=counts.Unhealthy;total.textContent=ts.length;const o=counts.Unhealthy?'Unhealthy':counts.Degraded?'Degraded':counts.Unknown?'Unknown':'Healthy';overall.textContent=o.toUpperCase();overall.className=o;healthText.textContent=o.toUpperCase();healthDot.style.background=o==='Healthy'?'var(--green)':o==='Degraded'||o==='Unknown'?'var(--yellow)':'var(--red)';footerHealth.style.background=healthDot.style.background;diagSummary.textContent=counts.Healthy+' Healthy · '+counts.Degraded+' Degraded · '+counts.Unhealthy+' Unhealthy';
+  healthy.textContent=counts.Healthy;degraded.textContent=counts.Degraded;unhealthy.textContent=counts.Unhealthy;total.textContent=ts.length;const o=counts.Unhealthy?'Unhealthy':counts.Degraded?'Degraded':counts.Unknown?'Unknown':'Healthy';overall.textContent=o.toUpperCase();overall.className=o;
   const ir=await get(api+'/incidents?minutes=60');if(ir.ok){const inc=await ir.json();incidents.innerHTML=inc.length?inc.map(i=>`<div class="incident"><b>${esc(i.summary)}</b><div class="muted">${esc((i.applications||[]).join(', '))}</div></div>`).join(''):'<div class="incident muted">No active incidents in the selected window.</div>';liveLog.innerHTML=(inc.length?inc.slice(0,3).map(i=>'<div class="row"><span class="t">'+new Date().toLocaleTimeString('en-GB',{hour12:false})+'</span> <span class="wrn">WRN</span> <span class="src">[Incident]</span> '+esc(i.summary)+'</div>'):[ '<div class="row"><span class="t">'+new Date().toLocaleTimeString('en-GB',{hour12:false})+'</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> No active incidents</div>' ]).join('');}
  }catch{updated.textContent='DIAGNOSTICS DATA UNAVAILABLE';targets.innerHTML='<div class="card">Unable to load diagnostics data.</div>';}
 }

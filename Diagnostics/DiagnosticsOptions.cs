@@ -30,4 +30,7 @@ public sealed record DiagnosticTargetOptions(
     string AuthenticationScheme,
     string SecretName,
     IReadOnlyList<int> SupportedLevels,
-    DateTimeOffset? ConfigurationRegisteredAtUtc);
+    DateTimeOffset? ConfigurationRegisteredAtUtc,
+    string? IconUrl = null,
+    string? ShortName = null,
+    string? Accent = null);

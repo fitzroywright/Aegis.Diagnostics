@@ -40,6 +40,12 @@ public sealed class ConfigurationContractPublisher(
             contract["version"] = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
             contract["siteId"] = NullIfBlank(configuration["Site:Id"] ?? configuration["Diagnostics:SiteId"]);
             contract["instanceId"] = NullIfBlank(configuration["Service:Identity"] ?? configuration["Diagnostics:InstanceId"] ?? Environment.MachineName);
+            contract["presentation"] = new JsonObject
+            {
+                ["iconUrl"] = configuration["Aegis:Presentation:IconUrl"],
+                ["shortName"] = "Diagnostics",
+                ["accent"] = configuration["Aegis:Presentation:Accent"] ?? "salmon"
+            };
             contract["runtimeEnvironment"] = DetectedRuntimeEnvironment.Capture(environment.EnvironmentName, environment.ContentRootPath);
 
             if (contract["diagnostics"] is JsonObject diagnostics)

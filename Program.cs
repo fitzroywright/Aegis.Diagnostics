@@ -38,7 +38,11 @@ builder.Services.AddSingleton<DiagnosticOrchestrationService>();
 builder.Services.AddSuiteSecurity();
 
 WebApplication app = builder.Build();
-app.MapSuiteSecurity();
+string operationsPublicUrl = builder.Configuration["Aegis:Operations:PublicUrl"]?.Trim()
+    ?? "https://operations.ffpja.org";
+string configurationPublicUrl = builder.Configuration["Aegis:Configuration:PublicUrl"]?.Trim()
+    ?? "https://config.ffpja.org";
+app.MapSuiteSecurity(operationsPublicUrl, configurationPublicUrl);
 app.UseSuiteSecurity();
 app.UseDefaultFiles();
 app.UseStaticFiles();

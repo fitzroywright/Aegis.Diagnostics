@@ -18,6 +18,7 @@ builder.Services.AddAegisControlPlaneOperationsLogging(builder.Configuration, "A
 builder.Services.AddSingleton(diagnosticsOptions);
 builder.Services.AddHttpClient("diagnostics-targets", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient("configuration-discovery", client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddHttpClient("operations-activity", client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddCommonDiagnostics();
 builder.Services.AddCommonSecrets(builder.Configuration);
 builder.Services.AddCommonSecretsDiagnostics();

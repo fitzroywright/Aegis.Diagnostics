@@ -18,7 +18,7 @@ internal sealed class SuiteSecurity(IConfiguration configuration, IHostEnvironme
     private readonly byte[] key = Encoding.UTF8.GetBytes(GetSigningKey(configuration, environment));
 
     public string Mode => configuration["SuiteSecurity:Mode"] ?? "Mock";
-    public int IdleTimeoutMinutes => Math.Clamp(configuration.GetValue("SuiteSecurity:IdleTimeoutMinutes", 15), 5, 240);
+    public int IdleTimeoutMinutes => Math.Clamp(configuration.GetValue("SuiteSecurity:IdleTimeoutMinutes", 480), 5, 480);
 
     private static string GetSigningKey(IConfiguration configuration, IHostEnvironment environment)
     {

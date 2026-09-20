@@ -118,7 +118,10 @@ public sealed class ConfigurationDiscoveryCatalog(
             string.IsNullOrWhiteSpace(capability.AuthenticationScheme) ? "MachineCredential" : capability.AuthenticationScheme,
             capability.SecretName ?? string.Empty,
             capability.SupportedLevels is { Length: > 0 } ? capability.SupportedLevels : [1, 2, 3, 4, 5],
-            contract.LastRegisteredAtUtc);
+            contract.LastRegisteredAtUtc,
+            contract.Presentation?.IconUrl,
+            contract.Presentation?.ShortName,
+            contract.Presentation?.Accent);
     }
 
     private static string ResolveBaseUrl(ConfigurationApplicationContract contract, string? configurationKey)
@@ -145,7 +148,13 @@ public sealed class ConfigurationDiscoveryCatalog(
         string? InstanceId,
         DateTimeOffset? LastRegisteredAtUtc,
         ConfigurationRequirementContract[]? Requirements,
-        ConfigurationDiagnosticsCapability? Diagnostics);
+        ConfigurationDiagnosticsCapability? Diagnostics,
+        ConfigurationPresentationContract? Presentation);
+
+    private sealed record ConfigurationPresentationContract(
+        string? IconUrl,
+        string? ShortName,
+        string? Accent);
 
     private sealed record ConfigurationRequirementContract(
         string? ConfigurationKey,

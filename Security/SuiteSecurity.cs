@@ -62,6 +62,20 @@ internal sealed class SuiteSecurity(IConfiguration configuration, IHostEnvironme
 
     public SuiteIdentity? Read(HttpRequest request) => request.Cookies.TryGetValue(Cookie, out string? value) ? Validate(value) : null;
     public SuiteIdentity? AcceptHandoff(string token) => Validate(token);
+    public string CreateHandoff(SuiteIdentity identity, string audience)
+    {
+        var ticket = new SuiteTicket(
+            identity.UserName,
+            identity.DisplayName,
+            identity.Title,
+            identity.Permissions,
+            audience,
+            DateTimeOffset.UtcNow.AddSeconds(45).ToUnixTimeSeconds(),
+            Guid.NewGuid().ToString("N"));
+        byte[] data = JsonSerializer.SerializeToUtf8Bytes(ticket);
+        using var hmac = new HMACSHA256(key);
+        return WebEncoders.Base64UrlEncode(data) + "." + WebEncoders.Base64UrlEncode(hmac.ComputeHash(data));
+    }
 
     public void Set(HttpResponse response, SuiteIdentity identity)
     {
@@ -150,7 +164,10 @@ internal static class SuiteSecurityExtensions
         });
     }
 
-    public static void MapSuiteSecurity(this WebApplication app)
+    public static void MapSuiteSecurity(
+        this WebApplication app,
+        string operationsPublicUrl,
+        string configurationPublicUrl)
     {
         app.MapGet("/login", (SuiteSecurity security, string? returnUrl) =>
             Results.Content(SuiteLoginPage.Render("Diagnostics", security.Mode, returnUrl), "text/html; charset=utf-8"));
@@ -172,7 +189,56 @@ internal static class SuiteSecurityExtensions
             if (identity is null) return Results.Redirect("/login?error=handoff");
             security.Set(context.Response, identity);
             context.Response.Headers.CacheControl = "no-store";
-            return Results.Redirect("/");
+            string returnUrl = form["returnUrl"].ToString();
+            return Results.Redirect(SafeLocal(returnUrl) ? returnUrl : "/");
+        });
+
+        app.MapGet("/handoff/{target}", (string target, HttpContext context, SuiteSecurity security) =>
+        {
+            SuiteIdentity? identity = security.Read(context.Request);
+            if (identity is null)
+                return Results.Redirect("/login?returnUrl=" + Uri.EscapeDataString(context.Request.Path + context.Request.QueryString));
+
+            string audience;
+            string url;
+            string permission;
+            string returnUrl = "/";
+
+            if (target.Equals("operations", StringComparison.OrdinalIgnoreCase))
+            {
+                audience = "Aegis.Operations";
+                url = operationsPublicUrl;
+                permission = "Operations.View";
+            }
+            else if (target.Equals("configuration", StringComparison.OrdinalIgnoreCase))
+            {
+                audience = "Aegis.Configuration";
+                url = configurationPublicUrl;
+                permission = "Configuration.View";
+            }
+            else if (target.Equals("registration", StringComparison.OrdinalIgnoreCase))
+            {
+                audience = "Aegis.Configuration";
+                url = configurationPublicUrl;
+                permission = "Configuration.View";
+                returnUrl = "/registration-lifecycle";
+            }
+            else
+            {
+                return Results.BadRequest();
+            }
+
+            if (!identity.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+            string action = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(url.TrimEnd('/') + "/auth/handoff");
+            string token = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(security.CreateHandoff(identity, audience));
+            string destination = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(returnUrl);
+            string html = $"""<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Opening {System.Text.Encodings.Web.HtmlEncoder.Default.Encode(target)}</title></head><body><form id="handoff" method="post" action="{action}"><input type="hidden" name="token" value="{token}"><input type="hidden" name="returnUrl" value="{destination}"></form><script>history.replaceState(null,'','/');document.getElementById('handoff').submit();</script><noscript><button form="handoff" type="submit">Continue</button></noscript></body></html>""";
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers.Pragma = "no-cache";
+            context.Response.Headers["Referrer-Policy"] = "no-referrer";
+            return Results.Content(html, "text/html; charset=utf-8");
         });
 
         app.MapGet("/auth/me", (HttpContext context, SuiteSecurity security) =>
@@ -189,6 +255,12 @@ internal static class SuiteSecurityExtensions
                 idleTimeoutMinutes = security.IdleTimeoutMinutes
             });
         });
+
+        static bool SafeLocal(string value) =>
+            !string.IsNullOrWhiteSpace(value) &&
+            value.StartsWith('/') &&
+            !value.StartsWith("//", StringComparison.Ordinal) &&
+            !value.Contains("\\", StringComparison.Ordinal);
 
         app.MapPost("/auth/logout", (HttpContext context, SuiteSecurity security) =>
         {

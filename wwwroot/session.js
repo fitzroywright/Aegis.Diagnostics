@@ -1,6 +1,6 @@
 (() => {
   let identity = null;
-  let timeoutMs = 15 * 60 * 1000;
+  let timeoutMs = 30 * 60 * 1000;
   let lastActivity = Date.now();
   let signedOut = false;
 
@@ -21,13 +21,13 @@
     }
     if (!response.ok) throw new Error('Unable to refresh authenticated session.');
     identity = await response.json();
-    timeoutMs = Math.max(5, Number(identity.idleTimeoutMinutes || 15)) * 60 * 1000;
+    timeoutMs = Math.max(5, Number(identity.idleTimeoutMinutes || 30)) * 60 * 1000;
     const name = document.getElementById('userName');
     const title = document.getElementById('userTitle');
     const session = document.getElementById('sessionInfo');
     if (name) name.textContent = identity.displayName || identity.userName || 'Signed in';
     if (title) title.textContent = identity.title || 'User';
-    if (session) session.textContent = `Automatic sign-out after ${identity.idleTimeoutMinutes || 15} minutes of inactivity`;
+    if (session) session.textContent = `Automatic sign-out after ${identity.idleTimeoutMinutes || 30} minutes of inactivity`;
     return identity;
   }
 
@@ -105,3 +105,25 @@ function installAegisConsoleAudio(){
   document.querySelectorAll('.top-buttons a,.workspace-nav a,.lcars-back').forEach(x=>x.addEventListener('pointerdown',()=>cues.navigation()));
 }
 installAegisConsoleAudio();
+
+async function refreshControlPlaneHealthBanner(){
+  const host=document.querySelector('.detail-scroll');if(!host)return;
+  let banner=document.getElementById('systemHealth')||document.getElementById('controlPlaneHealthBanner');
+  if(!banner){banner=document.createElement('section');banner.id='controlPlaneHealthBanner';banner.className='control-plane-health-banner';host.prepend(banner);}
+  if(!banner.classList.contains('control-plane-health-banner'))banner.classList.add('control-plane-health-banner');
+  try{
+    const response=await fetch('/health',{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const health=await response.json(),state=String(health.health||health.status||'Unknown'),summary=String(health.summary||'Health check returned no summary.').trim(),lower=state.toLowerCase();
+    if(lower==='healthy'){banner.style.display='none';banner.classList.remove('critical','health-unavailable');return;}
+    banner.classList.toggle('critical',lower==='unhealthy');
+    banner.classList.remove('health-unavailable');
+    banner.innerHTML='<strong>'+state.toUpperCase()+'</strong><div>'+String(summary).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))+'</div>';
+    banner.style.display='block';
+  }catch(error){
+    banner.classList.remove('critical');banner.classList.add('health-unavailable');
+    banner.innerHTML='<strong>HEALTH CHECK UNAVAILABLE</strong><div>'+String(error?.message||'Unable to read /health.')+'</div>';
+    banner.style.display='block';
+  }
+}
+refreshControlPlaneHealthBanner();setInterval(refreshControlPlaneHealthBanner,30000);

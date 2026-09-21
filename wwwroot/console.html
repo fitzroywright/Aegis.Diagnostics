@@ -64,22 +64,16 @@ async function toggleEngineerRecording(){
   engineerChunks=[];
   engineerRecorder=new MediaRecorder(engineerStream);
   engineerRecorder.ondataavailable=e=>{if(e.data&&e.data.size)engineerChunks.push(e.data)};
-  engineerRecorder.onstop=async()=>{
-   button.classList.remove('recording');button.title="Start Engineer's Log recording";button.setAttribute('aria-label',button.title);
+  engineerRecorder.onstop=()=>{
+   button.classList.remove('recording');button.title='Attach audio note';button.setAttribute('aria-label',button.title);
    engineerStream?.getTracks().forEach(t=>t.stop());engineerStream=null;
-   const blob=new Blob(engineerChunks,{type:engineerRecorder.mimeType||'audio/webm'});
-   state.textContent='UPLOADING…';
-   try{
-    const form=new FormData();form.append('audio',blob,'engineer-log.webm');
-    const response=await fetch(api+'/engineer-log',{method:'POST',body:form});
-    if(!response.ok)throw new Error('HTTP '+response.status);
-    const saved=await response.json();
-    state.textContent='SAVED '+new Date(saved.recordedAtUtc).toLocaleTimeString();
-    window.aegisAudio?.play('success');
-   }catch(e){state.textContent='SAVE FAILED';window.aegisAudio?.play('critical');}
+   pendingAudioBlob=new Blob(engineerChunks,{type:engineerRecorder.mimeType||'audio/webm'});
+   pendingAudioName='engineering-note.webm';
+   state.textContent='AUDIO ATTACHED';
+   window.aegisAudio?.play('success');
   };
   engineerRecorder.start();
-  button.classList.add('recording');button.title="Stop Engineer's Log recording";button.setAttribute('aria-label',button.title);state.textContent='RECORDING…';window.aegisAudio?.play('navigation');
+  button.classList.add('recording');button.title='Stop recording';button.setAttribute('aria-label',button.title);state.textContent='RECORDING…';window.aegisAudio?.play('navigation');
  }catch(e){state.textContent='MICROPHONE UNAVAILABLE';window.aegisAudio?.play('warning');}
 }
 document.addEventListener('click',e=>{if(e.target.closest('#engineerRecord'))toggleEngineerRecording();});

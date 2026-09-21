@@ -12,7 +12,10 @@ internal sealed record EngineerNote(
     string Status = "Active",
     DateTimeOffset? DispositionAtUtc = null,
     string? DispositionBy = null,
-    string? DispositionReason = null);
+    string? DispositionReason = null,
+    string? AudioFileName = null,
+    string? AudioContentType = null,
+    long? AudioBytes = null);
 
 internal static class DiagnosticsApi
 {
@@ -109,30 +112,9 @@ internal static class DiagnosticsApi
             IFormCollection form = await context.Request.ReadFormAsync(ct);
             IFormFile? audio = form.Files.GetFile("audio");
             if (audio is null || audio.Length == 0) return Results.BadRequest(new { error = "Audio recording is required." });
-            if (audio.Length > 25 * 1024 * 1024) return Results.BadRequest(new { error = "Recording exceeds the 25 MB limit." });
 
-            string root = configuration["Diagnostics:EngineerLogPath"]?.Trim()
-                ?? Path.Combine(AppContext.BaseDirectory, "data", "engineer-logs");
-            Directory.CreateDirectory(root);
-
-            string operatorName = OperatorName(context);
-            string safeOperator = string.Concat(operatorName.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_'));
-            string extension = audio.ContentType.Contains("ogg", StringComparison.OrdinalIgnoreCase) ? ".ogg"
-                : audio.ContentType.Contains("wav", StringComparison.OrdinalIgnoreCase) ? ".wav"
-                : ".webm";
-            string fileName = $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{safeOperator}-{Guid.NewGuid():N}{extension}";
-            string path = Path.Combine(root, fileName);
-
-            await using FileStream stream = File.Create(path);
-            await audio.CopyToAsync(stream, ct);
-
-            return Results.Ok(new
-            {
-                fileName,
-                operatorName,
-                recordedAtUtc = DateTimeOffset.UtcNow,
-                bytes = audio.Length
-            });
+            EngineerNote note = await SaveEngineerNoteAsync(context, configuration, "[Audio note]", audio, ct);
+            return Results.Ok(note);
         });
 
         app.MapGet("/api/engineering/diagnostics/engineer-notes", async (
@@ -167,7 +149,10 @@ internal static class DiagnosticsApi
                     x.Status,
                     x.DispositionAtUtc,
                     x.DispositionBy,
-                    x.DispositionReason
+                    x.DispositionReason,
+                    hasAudio = !string.IsNullOrWhiteSpace(x.AudioFileName),
+                    x.AudioContentType,
+                    x.AudioBytes
                 });
             return Results.Ok(visible);
         });
@@ -179,40 +164,52 @@ internal static class DiagnosticsApi
         {
             if (!Has(context, "Diagnostics.Run")) return Results.Forbid();
 
-            EngineerNoteRequest? request = await context.Request.ReadFromJsonAsync<EngineerNoteRequest>(cancellationToken: ct);
-            string text = request?.Text?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(text))
-                return Results.BadRequest(new { error = "Note text is required." });
+            string text;
+            IFormFile? audio = null;
+            if (context.Request.HasFormContentType)
+            {
+                IFormCollection form = await context.Request.ReadFormAsync(ct);
+                text = form["text"].ToString().Trim();
+                audio = form.Files.GetFile("audio");
+            }
+            else
+            {
+                EngineerNoteRequest? request = await context.Request.ReadFromJsonAsync<EngineerNoteRequest>(cancellationToken: ct);
+                text = request?.Text?.Trim() ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(text) && (audio is null || audio.Length == 0))
+                return Results.BadRequest(new { error = "Note text or audio is required." });
             if (text.Length > 4000)
                 return Results.BadRequest(new { error = "Note text exceeds the 4000 character limit." });
 
+            EngineerNote note = await SaveEngineerNoteAsync(context, configuration, text, audio, ct);
+            return Results.Ok(note);
+        });
+
+        app.MapGet("/api/engineering/diagnostics/engineer-notes/{noteId:guid}/audio", async (
+            HttpContext context,
+            Guid noteId,
+            IConfiguration configuration,
+            CancellationToken ct) =>
+        {
+            if (!View(context)) return Results.Forbid();
+
             string root = configuration["Diagnostics:EngineerLogPath"]?.Trim()
                 ?? Path.Combine(AppContext.BaseDirectory, "data", "engineer-logs");
-            Directory.CreateDirectory(root);
-            string path = Path.Combine(root, "engineer-notes.json");
+            string notesPath = Path.Combine(root, "engineer-notes.json");
+            if (!File.Exists(notesPath)) return Results.NotFound();
 
-            var notes = new List<EngineerNote>();
-            if (File.Exists(path))
-            {
-                await using FileStream read = File.OpenRead(path);
-                EngineerNote[]? existing = await System.Text.Json.JsonSerializer.DeserializeAsync<EngineerNote[]>(read, cancellationToken: ct);
-                if (existing is not null) notes.AddRange(existing);
-            }
+            EngineerNote[]? notes;
+            await using (FileStream read = File.OpenRead(notesPath))
+                notes = await System.Text.Json.JsonSerializer.DeserializeAsync<EngineerNote[]>(read, cancellationToken: ct);
 
-            var note = new EngineerNote(
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                OperatorName(context),
-                text);
+            EngineerNote? note = (notes ?? []).FirstOrDefault(x => x.Id == noteId);
+            if (note is null || string.IsNullOrWhiteSpace(note.AudioFileName)) return Results.NotFound();
 
-            notes.Add(note);
-
-            string temp = path + ".tmp";
-            await using (FileStream write = File.Create(temp))
-                await System.Text.Json.JsonSerializer.SerializeAsync(write, notes, cancellationToken: ct);
-            File.Move(temp, path, true);
-
-            return Results.Ok(note);
+            string audioPath = Path.Combine(root, note.AudioFileName);
+            if (!File.Exists(audioPath)) return Results.NotFound();
+            return Results.File(audioPath, note.AudioContentType ?? "audio/webm", enableRangeProcessing: true);
         });
 
         app.MapPost("/api/engineering/diagnostics/engineer-notes/{noteId:guid}/disposition", async (
@@ -281,6 +278,63 @@ internal static class DiagnosticsApi
                 updated.DispositionReason
             });
         });
+    }
+
+    private static async Task<EngineerNote> SaveEngineerNoteAsync(
+        HttpContext context,
+        IConfiguration configuration,
+        string text,
+        IFormFile? audio,
+        CancellationToken ct)
+    {
+        if (audio is not null && audio.Length > 25 * 1024 * 1024)
+            throw new BadHttpRequestException("Recording exceeds the 25 MB limit.");
+
+        string root = configuration["Diagnostics:EngineerLogPath"]?.Trim()
+            ?? Path.Combine(AppContext.BaseDirectory, "data", "engineer-logs");
+        Directory.CreateDirectory(root);
+        string notesPath = Path.Combine(root, "engineer-notes.json");
+
+        var notes = new List<EngineerNote>();
+        if (File.Exists(notesPath))
+        {
+            await using FileStream read = File.OpenRead(notesPath);
+            EngineerNote[]? existing = await System.Text.Json.JsonSerializer.DeserializeAsync<EngineerNote[]>(read, cancellationToken: ct);
+            if (existing is not null) notes.AddRange(existing);
+        }
+
+        string? audioFileName = null;
+        string? audioContentType = null;
+        long? audioBytes = null;
+        if (audio is not null && audio.Length > 0)
+        {
+            string operatorName = OperatorName(context);
+            string safeOperator = string.Concat(operatorName.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_'));
+            string extension = audio.ContentType.Contains("ogg", StringComparison.OrdinalIgnoreCase) ? ".ogg"
+                : audio.ContentType.Contains("wav", StringComparison.OrdinalIgnoreCase) ? ".wav"
+                : ".webm";
+            audioFileName = $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{safeOperator}-{Guid.NewGuid():N}{extension}";
+            audioContentType = string.IsNullOrWhiteSpace(audio.ContentType) ? "audio/webm" : audio.ContentType;
+            audioBytes = audio.Length;
+            await using FileStream stream = File.Create(Path.Combine(root, audioFileName));
+            await audio.CopyToAsync(stream, ct);
+        }
+
+        var note = new EngineerNote(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            OperatorName(context),
+            text,
+            AudioFileName: audioFileName,
+            AudioContentType: audioContentType,
+            AudioBytes: audioBytes);
+
+        notes.Add(note);
+        string temp = notesPath + ".tmp";
+        await using (FileStream write = File.Create(temp))
+            await System.Text.Json.JsonSerializer.SerializeAsync(write, notes, cancellationToken: ct);
+        File.Move(temp, notesPath, true);
+        return note;
     }
 
     static bool Machine(HttpContext c)=>c.Items.TryGetValue("DiagnosticsMachineAuthorized",out object? value)&&value is true;

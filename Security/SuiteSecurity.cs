@@ -145,7 +145,7 @@ internal static class SuiteSecurityExtensions
 {
     public static IServiceCollection AddSuiteSecurity(this IServiceCollection services) => services.AddSingleton<SuiteSecurity>();
 
-    public static void UseSuiteSecurity(this WebApplication app)
+    public static void UseSuiteSecurity(this WebApplication app, string operationsPublicUrl)
     {
         app.Use(async (context, next) =>
         {
@@ -162,7 +162,11 @@ internal static class SuiteSecurityExtensions
             SuiteIdentity? identity = security.Read(context.Request);
             if (identity is null)
             {
-                context.Response.Redirect("/login?returnUrl=" + Uri.EscapeDataString(context.Request.Path + context.Request.QueryString));
+                string returnUrl = context.Request.Path + context.Request.QueryString;
+                string sso = operationsPublicUrl.TrimEnd('/') +
+                    "/handoff/diagnostics?returnUrl=" +
+                    Uri.EscapeDataString(returnUrl);
+                context.Response.Redirect(sso);
                 return;
             }
 
@@ -179,6 +183,15 @@ internal static class SuiteSecurityExtensions
     {
         app.MapGet("/login", (SuiteSecurity security, string? returnUrl) =>
             Results.Content(SuiteLoginPage.Render("Diagnostics", security.Mode, returnUrl), "text/html; charset=utf-8"));
+
+        app.MapGet("/auth/sso", (string? returnUrl) =>
+        {
+            string destination = SafeLocal(returnUrl ?? string.Empty) ? returnUrl! : "/";
+            string target = operationsPublicUrl.TrimEnd('/') +
+                "/handoff/diagnostics?returnUrl=" +
+                Uri.EscapeDataString(destination);
+            return Results.Redirect(target);
+        });
 
         app.MapPost("/auth/login", async (HttpContext context, SuiteSecurity security) =>
         {

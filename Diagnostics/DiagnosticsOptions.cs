@@ -12,7 +12,8 @@ public sealed class DiagnosticsOptions
     public string MachineCredentialSecretName { get; init; } = "diagnostics/machine/Aegis.Diagnostics";
     public string RunStorePath { get; init; } = "data/engineering-diagnostic-runs.json";
     public int DiscoveryRefreshSeconds { get; init; } = 60;
-    public int ObservationStaleSeconds { get; init; } = 180;
+    public int HealthPollSeconds { get; init; } = 10;
+    public int ObservationStaleSeconds { get; init; } = 45;
 }
 
 public sealed record DiagnosticTargetOptions(

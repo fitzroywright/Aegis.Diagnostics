@@ -24,7 +24,7 @@
     timeoutMs = Math.max(5, Number(identity.idleTimeoutMinutes || 30)) * 60 * 1000;
     const name = document.getElementById('userName');
     const title = document.getElementById('userTitle');
-    const session = document.getElementById('sessionInfo');const brandUser=document.getElementById('brandUser');
+    const session = document.getElementById('sessionInfo');
     if (name) name.textContent = identity.displayName || identity.userName || 'Signed in';
     if (title) title.textContent = identity.title || 'User';
     if (session) session.textContent = `Automatic sign-out after ${identity.idleTimeoutMinutes || 30} minutes of inactivity`;
@@ -90,7 +90,7 @@ function installAegisConsoleAudio(){
     }catch{}
   }
   const cues={
-    navigation:()=>{tone(1046.5,.026,.035);tone(1318.5,.031,.03,.035)},
+    navigation:()=>{tone(1174.7,.025,.032);tone(1568,.032,.028,.032)},
     success:()=>{tone(659.3,.035,.035);tone(987.8,.04,.038,.047);tone(1318.5,.043,.032,.097)},
     warning:()=>{tone(587.3,.06,.045);tone(493.9,.072,.045,.095)},
     critical:()=>{tone(392,.08,.055);tone(329.6,.085,.055,.11);tone(261.6,.115,.06,.225)},

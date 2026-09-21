@@ -79,6 +79,6 @@ async function load(){
   const ir=await get(api+'/incidents?minutes=60');if(ir.ok){const inc=await ir.json();incidents.innerHTML=inc.length?inc.map(i=>`<div class="incident"><b>${esc(i.summary)}</b><div class="muted">${esc((i.applications||[]).join(', '))}</div></div>`).join(''):'<div class="incident muted">No active incidents in the selected window.</div>';liveLog.innerHTML=(inc.length?inc.slice(0,3).map(i=>'<div class="row"><span class="t">'+recentStamp()+'</span> <span class="wrn">WRN</span> <span class="src">[Incident]</span> '+esc(i.summary)+'</div>'):[ '<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> No active incidents</div>' ]).join('');}
  }catch{lastScan.textContent='Last Scan: UNAVAILABLE';targets.innerHTML='<div class="card">Unable to load diagnostics data.</div>';}
 }
-load();setInterval(load,30000);
+load();setInterval(load,10000);
 </script>
 </body></html>

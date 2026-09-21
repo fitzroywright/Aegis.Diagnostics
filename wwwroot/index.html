@@ -15,7 +15,7 @@
 </header>
 
 <section class="workspace-shell">
-  <div class="workspace-arm"><div class="workspace-title">Application Health</div><div class="last-scan" id="lastScan">Last Scan: SCANNING</div></div><div class="workspace-leg"></div>
+  <div class="workspace-arm"><div class="workspace-title" id="workspaceTitle">Overview</div><div class="last-scan" id="lastScan">Last Scan: SCANNING</div></div><div class="workspace-leg"></div>
   <nav class="workspace-nav"><a data-nav="overview" href="/">Overview</a><a data-nav="health" href="/#systemHealth">Health</a><a href="/activity.html">Logs</a></nav>
   <button class="lcars-back" type="button" onclick="if(history.length>1){history.back()}else{location.href='/'}">Back</button>
   <main class="detail-scroll">
@@ -41,6 +41,8 @@ function syncDiagnosticsNav(){
   const healthActive=location.hash.toLowerCase()==='#systemhealth';
   document.querySelector('[data-nav="overview"]')?.classList.toggle('active',!healthActive);
   document.querySelector('[data-nav="health"]')?.classList.toggle('active',healthActive);
+  const title=document.getElementById('workspaceTitle');
+  if(title)title.textContent=healthActive?'Health':'Overview';
 }
 window.addEventListener('hashchange',syncDiagnosticsNav);
 syncDiagnosticsNav();

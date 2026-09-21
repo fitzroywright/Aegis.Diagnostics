@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Activity · Diagnostics</title>
+<title>Logs · Diagnostics</title>
 <link rel="stylesheet" href="/lcars.css">
 <style>
 .detail-scroll{overflow:hidden!important;display:flex!important;flex-direction:column;gap:6px;padding:8px 10px 6px 10px!important}
@@ -28,16 +28,16 @@
 <header class="lcars-top">
   <div class="left-vertical"></div><div class="left-gold"></div><div class="bottom-arm"></div><div class="join-dot"></div>
   <div class="brand"><div class="section">Diagnostics</div><div class="org">Food For The Poor Jamaica</div><div class="datetime" id="brandDateTime"></div><div class="brand-user" id="brandUser">SIGNED IN</div></div>
-  <div class="live-log"><div class="recent-title">Recent Activity</div><div class="recent-rows" id="liveLog"><div class="row"><span class="t">--:--:--</span> <span class="inf">INF</span> <span class="src">[Activity]</span> Connecting to centralized suite telemetry</div></div></div>
-  <div class="top-buttons"><a class="blue" href="/handoff/operations">Operations</a><a class="salmon" href="/">Diagnostics</a><a class="gold" href="/handoff/configuration">Configuration</a><a class="gray" href="/handoff/registration">Registration</a></div>
+  <div class="live-log"><div class="recent-title">Recent Logs</div><div class="recent-rows" id="liveLog"><div class="row"><span class="t">--:--:--</span> <span class="inf">INF</span> <span class="src">[Activity]</span> Connecting to centralized suite telemetry</div></div></div>
+  <div class="top-buttons"><a class="blue" href="/handoff/operations">Operations</a><a class="salmon" href="/">Diagnostics</a><a class="gold" href="/handoff/configuration">Configuration</a><a class="logout" href="/auth/logout">Logout</a></div>
 </header>
 
 <section class="workspace-shell">
   <div class="workspace-arm"><div class="workspace-title">Suite Activity Log</div><div class="last-scan" id="lastScan">Last Scan: SCANNING</div></div><div class="workspace-leg"></div>
-  <nav class="workspace-nav"><a href="/">Health</a><a class="active" href="/activity.html">Activity</a><a href="/console.html">Engineering</a></nav>
+  <nav class="workspace-nav"><a href="/">Health</a><a class="active" href="/activity.html">Logs</a><a href="/console.html">Console</a></nav>
   <button class="lcars-back" type="button" onclick="if(history.length>1){history.back()}else{location.href='/'}">Back</button>
   <main class="detail-scroll">
-    <div class="activity-tabs"><button id="activityTab" class="active">Activity Log</button><button id="logsTab">Application Logs</button></div>
+    <div class="activity-tabs"><button id="activityTab" class="active">Lifecycle Logs</button><button id="logsTab">Application Logs</button></div>
     <div class="filter-toggle-row"><button id="filterToggle" type="button" aria-expanded="false" aria-controls="filtersPanel">Show Filters</button></div>
     <section class="activity-toolbar collapsed" id="filtersPanel" aria-hidden="true">
       <input id="application" placeholder="Application">
@@ -56,7 +56,7 @@
       <button id="clear">Clear</button>
       <span id="state" class="muted">CONNECTING…</span>
     </div>
-    <section class="activity-panel"><div id="view" class="activity-log" tabindex="0" aria-label="Diagnostics activity results"></div></section>
+    <section class="activity-panel"><div id="view" class="activity-log" tabindex="0" aria-label="Diagnostics log results"></div></section>
     <div id="filterSummary" class="filter-summary"><b>FILTER</b><span>None · 0 events</span></div>
   </main>
   <aside class="flow-overlay" id="flowOverlay" hidden role="dialog" aria-modal="false" aria-labelledby="flowOverlayTitle">

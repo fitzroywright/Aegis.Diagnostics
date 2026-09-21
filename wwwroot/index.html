@@ -16,7 +16,7 @@
 
 <section class="workspace-shell">
   <div class="workspace-arm"><div class="workspace-title">Application Health</div><div class="last-scan" id="lastScan">Last Scan: SCANNING</div></div><div class="workspace-leg"></div>
-  <nav class="workspace-nav"><a class="active" href="/">Overview</a><a href="/#systemHealth">Health</a><a href="/activity.html">Logs</a></nav>
+  <nav class="workspace-nav"><a data-nav="overview" href="/">Overview</a><a data-nav="health" href="/#systemHealth">Health</a><a href="/activity.html">Logs</a></nav>
   <button class="lcars-back" type="button" onclick="if(history.length>1){history.back()}else{location.href='/'}">Back</button>
   <main class="detail-scroll">
     <section class="page-head"></section>
@@ -37,6 +37,13 @@ function seedRecentTimestamps(){document.querySelectorAll('#liveLog .t').forEach
 seedRecentTimestamps();
 function updateBrandClock(){const d=new Date(),target=document.getElementById('brandDateTime');if(!target)return;const month=d.toLocaleString('en-US',{month:'short'}).toUpperCase(),day=String(d.getDate()).padStart(2,'0'),year=d.getFullYear(),hours=String(d.getHours()).padStart(2,'0'),minutes=String(d.getMinutes()).padStart(2,'0'),tt=d.getHours()>=12?'PM':'AM';target.textContent=month+' '+day+' '+year+' '+hours+':'+minutes+' '+tt;}updateBrandClock();setInterval(updateBrandClock,1000);
 document.querySelectorAll('.top-buttons a,.workspace-nav a').forEach(a=>a.addEventListener('pointerdown',()=>{a.classList.add('nav-flash');setTimeout(()=>a.classList.remove('nav-flash'),180)}));
+function syncDiagnosticsNav(){
+  const healthActive=location.hash.toLowerCase()==='#systemhealth';
+  document.querySelector('[data-nav="overview"]')?.classList.toggle('active',!healthActive);
+  document.querySelector('[data-nav="health"]')?.classList.toggle('active',healthActive);
+}
+window.addEventListener('hashchange',syncDiagnosticsNav);
+syncDiagnosticsNav();
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 function appInitials(t){const src=String(t?.shortName||t?.name||t?.applicationId||'AE').replace(/^Aegis[. ]/i,'');const parts=src.split(/[ ._-]+/).filter(Boolean);return parts.length>1?(parts[0][0]+parts[1][0]).toUpperCase():src.slice(0,2).toUpperCase()}
 function safeIconUrl(v){if(!v)return'';try{if(v.startsWith('/')&&!v.startsWith('//')&&!v.includes('..'))return v;const u=new URL(v,location.origin);return u.protocol==='https:'?u.href:''}catch{return''}}

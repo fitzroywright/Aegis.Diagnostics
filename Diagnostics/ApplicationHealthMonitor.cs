@@ -48,7 +48,7 @@ public sealed class ApplicationHealthMonitor(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        TimeSpan interval = TimeSpan.FromSeconds(Math.Max(30, options.DiscoveryRefreshSeconds));
+        TimeSpan interval = TimeSpan.FromSeconds(Math.Max(5, options.HealthPollSeconds));
         while (!stoppingToken.IsCancellationRequested)
         {
             foreach (DiagnosticTargetOptions target in discovery.Targets)

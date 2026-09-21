@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Health · Diagnostics</title>
 <link rel="stylesheet" href="/lcars.css">
-<style>.diag-appicon{width:38px;height:38px;border-radius:9px;background:#173d58;border:1px solid #3f7ca3;display:grid;place-items:center;font:800 12px Arial,sans-serif;overflow:hidden;flex:none}.diag-appicon img,.diag-appicon>span{width:100%;height:100%;object-fit:contain;place-items:center}</style></head>
+<style>.diag-appicon{width:38px;height:38px;border-radius:9px;background:#173d58;border:1px solid #3f7ca3;display:grid;place-items:center;font:800 12px Arial,sans-serif;overflow:hidden;flex:none}.diag-appicon img,.diag-appicon>span{width:100%;height:100%;object-fit:contain;place-items:center}.diag-landscape{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));border:1px solid var(--line-soft);border-top:2px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:10px}.diag-landscape>a{padding:8px 10px;border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);min-height:66px;background:linear-gradient(180deg,rgba(8,27,42,.44),rgba(1,7,12,.34))}.diag-landscape b,.diag-landscape small{display:block}.diag-landscape small{color:var(--muted);font-size:10px}.diag-landscape .Healthy{color:var(--radioactive)}.diag-landscape .Degraded,.diag-landscape .Unknown{color:var(--title-gold)}.diag-landscape .Unhealthy{color:var(--sunset-red)}@media(max-width:1100px){.diag-landscape{grid-template-columns:repeat(2,1fr)}}</style></head>
 <body>
 <header class="lcars-top">
   <div class="left-vertical"></div><div class="left-gold"></div><div class="bottom-arm"></div><div class="join-dot"></div>
@@ -28,6 +28,8 @@
         <a class="metric" href="/console.html"><span>▤</span><b id="overviewRuns">0</b><small>Recent Runs</small></a>
         <a class="metric" href="#systemHealth"><span>▲</span><b id="overviewAttention">0</b><small>Needs Attention</small></a>
       </section>
+      <div class="sectiontitle">Installation Diagnostics Landscape</div>
+      <section id="diagnosticLandscape" class="diag-landscape"><a><b>Loading diagnostic landscape…</b></a></section>
       <div class="sectiontitle">Current Attention</div><section id="incidents" class="incidents"><div class="incident muted">Loading incident telemetry…</div></section>
       <div class="sectiontitle">Recent Engineering Runs</div><section id="recentRuns" class="runs"><div class="run muted">Loading diagnostic history…</div></section>
     </section>
@@ -105,6 +107,14 @@ async function load(){
   const ir=await get(api+'/incidents?minutes=60');if(ir.ok){const inc=await ir.json();incidents.innerHTML=inc.length?inc.map(i=>`<div class="incident"><b>${esc(i.summary)}</b><div class="muted">${esc((i.applications||[]).join(', '))}</div></div>`).join(''):'<div class="incident muted">No active incidents in the selected window.</div>';liveLog.innerHTML=(inc.length?inc.slice(0,3).map(i=>'<div class="row"><span class="t">'+recentStamp()+'</span> <span class="wrn">WRN</span> <span class="src">[Incident]</span> '+esc(i.summary)+'</div>'):[ '<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> No active incidents</div>' ]).join('');}
  }catch{lastScan.textContent='Last Scan: UNAVAILABLE';targets.innerHTML='<div class="card">Unable to load diagnostics data.</div>';}
 }
-load();setInterval(load,10000);
+async function refreshRecentLogs(){
+ try{
+  const r=await get(api+'/activity?take=5');if(!r.ok)return;
+  const x=await r.json(),events=x.events||[];
+  if(!events.length)return;
+  liveLog.innerHTML=events.slice(-5).map(e=>{const outcome=String(e.outcome||e.level||'Information'),lower=outcome.toLowerCase(),level=(lower.includes('fail')||lower.includes('error')||lower.includes('critical'))?'ERR':(lower.includes('warn')?'WRN':'INF');return '<div class="row"><span class="t">'+recentStamp(e.occurredAtUtc||e.atUtc||e.at)+'</span> <span class="'+level.toLowerCase()+'">'+level+'</span> <span class="src">['+esc(e.applicationId||e.application||'Diagnostics')+']</span> '+esc(e.detail||e.stage||e.flow||e.code||outcome)+'</div>'}).join('');
+ }catch{}
+}
+load();setInterval(load,10000);refreshRecentLogs();setInterval(refreshRecentLogs,5000);
 </script>
 </body></html>

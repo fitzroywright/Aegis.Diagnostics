@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Incidents · Diagnostics</title>
+<link rel="stylesheet" href="/lcars.css">
+<style>
+.incident-list{display:grid;gap:10px}
+.incident-card{border:1px solid var(--line-soft);border-top:2px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(8,27,42,.50),rgba(1,7,12,.40));padding:14px}
+.incident-card b{color:var(--title-gold)}
+.incident-card .apps,.incident-card .meta{color:var(--muted);margin-top:5px}
+.sound-toggle{margin-left:10px;margin-right:14px;border:0;border-left:3px solid #000;background:#071018;color:var(--title-gold);width:34px;height:26px;padding:4px 7px;cursor:pointer;z-index:6;display:grid;place-items:center}
+</style>
+</head>
+<body>
+<header class="lcars-top">
+  <div class="left-vertical"></div><div class="left-gold"></div><div class="bottom-arm"></div><div class="join-dot"></div>
+  <div class="brand"><div class="section">Diagnostics</div><div class="org">Food For The Poor Jamaica</div><div class="datetime" id="brandDateTime"></div><div class="brand-user" id="brandUser">SIGNED IN</div></div>
+  <div class="live-log"><div class="recent-title">Recent Logs</div><div class="recent-rows" id="liveLog"><div class="row"><span class="t">--:--:--</span> <span class="wrn">WRN</span> <span class="src">[Incidents]</span> Loading active incidents</div></div></div>
+  <div class="top-buttons"><a class="blue" href="/handoff/operations">Operations</a><a class="salmon" href="/">Diagnostics</a><a class="gold" href="/handoff/configuration">Configuration</a><a class="logout" href="/auth/logout">Logout</a></div>
+</header>
+
+<section class="workspace-shell">
+  <div class="workspace-arm"><div class="workspace-title">Incidents</div><div class="last-scan" id="lastScan">Last Scan: SCANNING</div></div><div class="workspace-leg"></div>
+  <nav class="workspace-nav"><a href="/">Overview</a><a href="/#systemHealth">Health</a><a href="/console.html">Engineering</a><a class="active" href="/incidents.html">Incidents</a><a href="/activity.html">Logs</a></nav>
+  <button class="lcars-back" type="button" onclick="if(history.length>1){history.back()}else{location.href='/'}">Back</button>
+  <main class="detail-scroll">
+    <section class="page-head"><div><p>Current correlated diagnostic conditions requiring operator attention.</p></div></section>
+    <section id="incidents" class="incident-list"><div class="incident-card muted">Loading incidents…</div></section>
+  </main>
+</section>
+
+<script src="/session.js"></script>
+<script>
+const api='/api/engineering/diagnostics';
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);return Number.isNaN(d.getTime())?String(v??'—'):d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'});};
+function recentStamp(v){const d=v?new Date(v):new Date();if(Number.isNaN(d.getTime()))return '--- -- ---- --:--:--';const mon=d.toLocaleString('en-US',{month:'short'});return mon+' '+String(d.getDate()).padStart(2,'0')+' '+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0')}
+function updateBrandClock(){const d=new Date(),target=document.getElementById('brandDateTime');if(!target)return;const month=d.toLocaleString('en-US',{month:'short'}).toUpperCase(),day=String(d.getDate()).padStart(2,'0'),year=d.getFullYear(),hours=String(d.getHours()).padStart(2,'0'),minutes=String(d.getMinutes()).padStart(2,'0'),tt=d.getHours()>=12?'PM':'AM';target.textContent=month+' '+day+' '+year+' '+hours+':'+minutes+' '+tt;}updateBrandClock();setInterval(updateBrandClock,1000);
+async function loadBrandUser(){try{const r=await fetch('/auth/me',{cache:'no-store'});if(!r.ok)return;const x=await r.json(),e=document.getElementById('brandUser');if(e)e.textContent='User: '+(x.displayName||x.userName||'Signed in')+' · IP: '+(x.clientIp||'unknown')}catch{}}
+loadBrandUser();
+document.querySelectorAll('.top-buttons a,.workspace-nav a').forEach(a=>a.addEventListener('pointerdown',()=>{a.classList.add('nav-flash');setTimeout(()=>a.classList.remove('nav-flash'),180)}));
+
+function installAegisConsoleAudio(){
+  const key='aegis.console.sound',enabled=()=>localStorage.getItem(key)!=='off';let ctx=null;
+  function tone(freq,duration,volume=.04,delay=0){if(!enabled())return;try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();const t=ctx.currentTime+delay,o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(volume,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+duration);o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+duration+.02)}catch{}}
+  const cues={navigation:()=>{tone(1174.7,.025,.032);tone(1568,.032,.028,.032)},success:()=>{tone(659.3,.035,.032);tone(987.8,.04,.034,.045);tone(1318.5,.045,.03,.095)},warning:()=>{tone(587.3,.055,.04);tone(493.9,.075,.04,.09)}};
+  window.aegisAudio={play:name=>cues[name]?.(),enabled};
+  const arm=document.querySelector('.workspace-arm');
+  if(arm&&!document.getElementById('soundToggle')){const b=document.createElement('button');b.id='soundToggle';b.type='button';b.className='sound-toggle';const paint=()=>{b.textContent=enabled()?'♪':'×';b.title=enabled()?'Sound on':'Sound off';b.setAttribute('aria-label',b.title)};paint();b.onclick=()=>{localStorage.setItem(key,enabled()?'off':'on');paint();if(enabled())cues.success()};arm.appendChild(b)}
+  document.querySelectorAll('.top-buttons a,.workspace-nav a,.lcars-back').forEach(x=>x.addEventListener('pointerdown',()=>cues.navigation()));
+}
+installAegisConsoleAudio();
+
+async function load(){
+  try{
+    await window.aegisSession?.refresh?.();
+    const r=await fetch(api+'/incidents?minutes=60',{cache:'no-store'});
+    if(r.status===401){location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname);return}
+    if(r.status===403){incidents.innerHTML='<div class="incident-card">Permission required to view incidents.</div>';return}
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    incidents.innerHTML=data.length?data.map(i=>'<article class="incident-card"><b>'+esc(i.summary||'Incident')+'</b><div class="apps">'+esc((i.applications||[]).join(', ')||'No application list')+'</div><div class="meta">'+esc(i.correlationId||i.id||'')+'</div></article>').join(''):'<div class="incident-card muted">No active incidents in the selected window.</div>';
+    lastScan.textContent='Last Scan: '+new Date().toLocaleString();
+    liveLog.innerHTML=(data.length?data.slice(0,5).map(i=>'<div class="row"><span class="t">'+recentStamp(i.occurredAtUtc||i.startedAtUtc||i.detectedAtUtc)+'</span> <span class="wrn">WRN</span> <span class="src">[Incident]</span> '+esc(i.summary||'Incident')+'</div>'):[ '<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> No active incidents</div>' ]).join('');
+  }catch(e){incidents.innerHTML='<div class="incident-card">Unable to load incidents · '+esc(e.message)+'</div>';lastScan.textContent='Last Scan: UNAVAILABLE'}
+}
+load();setInterval(load,10000);
+</script>
+</body>
+</html>

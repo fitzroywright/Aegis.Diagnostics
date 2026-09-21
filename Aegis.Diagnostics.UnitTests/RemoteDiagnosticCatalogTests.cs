@@ -79,7 +79,8 @@ public sealed class RemoteDiagnosticCatalogTests
         Dictionary<string, string?> values = new()
         {
             ["CommonSecrets:Mode"] = "Test",
-            ["CommonSecrets:ProviderOrder:0"] = "Configuration"
+            ["CommonSecrets:ProviderOrder:0"] = "LocalConfiguration",
+            ["CommonSecrets:Providers:LocalConfiguration:Type"] = "Configuration"
         };
         if (includeCredential) values[secretName] = "test-machine-key";
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();

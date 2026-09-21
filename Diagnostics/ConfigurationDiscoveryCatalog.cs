@@ -83,8 +83,7 @@ public sealed class ConfigurationDiscoveryCatalog(
 
             HttpClient client = httpClientFactory.CreateClient("configuration-discovery");
             using HttpRequestMessage request = new(HttpMethod.Get, new Uri(configurationUri, "/api/contracts/discovery"));
-            request.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", credential);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Registration-Key", credential);
             request.Headers.TryAddWithoutValidation("X-Aegis-Application-Id", options.ApplicationId);
             request.Headers.TryAddWithoutValidation("X-Aegis-Instance-Id", instanceId);
             request.Headers.TryAddWithoutValidation("X-Aegis-Correlation-Id", Guid.NewGuid().ToString("N"));

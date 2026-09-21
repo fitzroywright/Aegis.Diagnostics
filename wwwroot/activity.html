@@ -6,16 +6,22 @@
 <title>Activity · Diagnostics</title>
 <link rel="stylesheet" href="/lcars.css">
 <style>
-.activity-toolbar{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:8px;margin:12px 0}
-.activity-toolbar input,.activity-toolbar select{background:#03131d;color:#eaf6ff;border:1px solid #2a668d;border-radius:6px;padding:9px}
-.activity-tabs{display:flex;gap:8px;margin:8px 0 12px}.activity-tabs button{border:0;border-radius:16px;padding:8px 14px;font-weight:800;cursor:pointer;background:#314654;color:#fff}.activity-tabs button.active{background:#e7b94f;color:#050505}
-.activity-actions{display:flex;gap:8px;align-items:center;margin:8px 0}.activity-actions button{border:0;border-radius:14px;padding:7px 12px;font-weight:800;cursor:pointer}.activity-actions span{margin-left:auto}
-.activity-panel{border:1px solid #235a7c;border-radius:8px;background:#03090d;overflow:hidden}
-.activity-log{height:calc(100vh - 360px);min-height:420px;overflow:auto}
-.activity-row{display:grid;grid-template-columns:120px 170px 140px 110px 1fr;gap:10px;padding:7px 10px;border-bottom:1px solid #102430;align-items:center}
-.activity-row:hover{background:#0a1720}.activity-row .time{color:#8ca2b1}.activity-row .app{color:#8fd0fb}.activity-row .flow{color:#d8aff7}.activity-row .detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.Information,.Started{color:#8fd0fb}.Debug,.Trace{color:#8ca2b1}.Warning{color:#e7b94f}.Error,.Critical,.Failed{color:#f16f69}.Succeeded{color:#78d99b}.empty{padding:36px;text-align:center;color:#8ca2b1}
-@media(max-width:950px){.activity-toolbar{grid-template-columns:repeat(2,1fr)}.activity-row{grid-template-columns:95px 1fr 100px}.activity-row .flow,.activity-row .detail{display:none}}
+.detail-scroll{overflow:hidden!important;display:flex!important;flex-direction:column;gap:6px;padding:8px 10px 6px 10px!important}
+.activity-tabs{display:flex;gap:8px;margin:0 0 2px}.activity-tabs button{border:0;border-radius:16px;padding:8px 14px;font-weight:800;cursor:pointer;background:#314654;color:#fff}.activity-tabs button.active{background:#e7b94f;color:#050505}
+.filter-toggle-row{display:flex;justify-content:flex-end;align-items:center;min-height:26px}
+.activity-toolbar{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:7px;margin:0;padding:8px 10px;background:#02090e;max-height:220px;opacity:1;overflow:hidden;transition:max-height .18s ease,opacity .14s ease,padding .18s ease}
+.activity-toolbar.collapsed{max-height:0;opacity:0;padding-top:0;padding-bottom:0;pointer-events:none}
+.activity-toolbar input,.activity-toolbar select{background:#03131d;color:#eaf6ff;border:1px solid #2a668d;border-radius:4px;padding:7px 8px;font-size:12px}.activity-toolbar .wide{grid-column:span 2}
+.activity-actions{display:flex;gap:6px;align-items:center;margin:0;min-height:28px}.activity-actions button,.filter-toggle-row button,.activity-toolbar button,.empty button{border:0;border-radius:5px;padding:6px 9px;font-weight:800;cursor:pointer;background:#5588ee;color:#071018;text-transform:uppercase;font-size:10px}.activity-toolbar button.secondary,.empty button{background:#7799dd}.activity-actions span{margin-left:auto}
+.activity-panel{border:0;border-radius:0;background:#000;overflow:hidden;flex:1;min-height:0;margin:0 2px;position:relative}
+.activity-log{height:100%;min-height:0;overflow:auto;padding:2px 0}
+.activity-row{display:grid;grid-template-columns:150px 170px 140px 110px minmax(180px,1fr) 88px;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(35,90,124,.45);align-items:center;outline:none;font:13px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace}
+.activity-row:hover{background:#0a1720}.activity-row.active{background:#f3f3fc!important;color:#050b12!important}.activity-row.active .time,.activity-row.active .app,.activity-row.active .flow,.activity-row.active .detail,.activity-row.active .analyze,.activity-row.active .status{color:#050b12!important}
+.activity-row .time{color:#8ca2b1}.activity-row .app{color:#8fd0fb}.activity-row .flow{color:#d8aff7}.activity-row .detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.activity-row .analyze{border:0;background:transparent;color:#e7b94f;font:inherit;font-weight:900;cursor:pointer}
+.Information,.Started{color:#8fd0fb}.Debug,.Trace{color:#8ca2b1}.Warning{color:#e7b94f}.Error,.Critical,.Failed{color:#f16f69}.Succeeded{color:#78d99b}
+.empty{padding:36px;text-align:center;color:#8ca2b1}.filter-summary{flex:0 0 auto;min-height:28px;display:flex;align-items:center;gap:8px;padding:4px 8px;margin:0 2px;background:#071018;border-top:2px solid #e7b94f;color:#99ccff;font:800 10px/1.2 Arial,sans-serif;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden}.filter-summary b{color:#e7b94f}.filter-summary span{overflow:hidden;text-overflow:ellipsis}
+.flow-overlay{position:absolute;z-index:40;right:26px;top:72px;width:min(780px,calc(100% - 150px));max-height:calc(100% - 92px);display:flex;flex-direction:column;background:#02080d;border:2px solid #e7b94f;box-shadow:0 12px 34px rgba(0,0,0,.78);overflow:hidden}.flow-overlay[hidden]{display:none}.flow-overlay-head{display:flex;align-items:center;gap:12px;background:#e7b94f;color:#071018;padding:8px 10px;font-weight:900;text-transform:uppercase}.flow-overlay-head .grow{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.flow-overlay-head button{border:0;background:#071018;color:#e7b94f;font-weight:900;padding:5px 9px;cursor:pointer}.flow-overlay-body{overflow:auto;min-height:140px;padding:10px}.trace{background:#040b11;margin-bottom:10px}.trace-head{display:flex;gap:14px;align-items:center;padding:12px 14px;background:#091522}.trace-head .grow{flex:1}.trace-meta{color:#8ca2b1;font-size:12px}.stages{display:flex;align-items:flex-start;padding:20px 14px;overflow-x:auto}.stage{min-width:150px;text-align:center;position:relative}.stage:not(:last-child):after{content:"";position:absolute;top:12px;left:59%;width:82%;height:3px;background:#314654}.lamp{position:relative;z-index:1;width:24px;height:24px;border-radius:50%;margin:0 auto 8px;background:#53646f}.lamp.Succeeded{background:#78d99b}.lamp.Warning{background:#e7b94f}.lamp.Failed{background:#f16f69}.lamp.Started{background:#5588ee}.stage b{display:block;font-size:12px}.stage small{display:block;color:#8ca2b1;margin-top:4px}.overlay-empty{padding:22px;color:#8ca2b1;text-align:center}
+@media(max-width:950px){.activity-toolbar{grid-template-columns:repeat(2,1fr)}.activity-row{grid-template-columns:115px 1fr 100px 76px}.activity-row .flow,.activity-row .detail{display:none}.flow-overlay{right:12px;width:calc(100% - 130px)}}
 </style>
 </head>
 <body>
@@ -31,90 +37,64 @@
   <nav class="workspace-nav"><a href="/">Health</a><a class="active" href="/activity.html">Activity</a><a href="/console.html">Engineering</a></nav>
   <button class="lcars-back" type="button" onclick="if(history.length>1){history.back()}else{location.href='/'}">Back</button>
   <main class="detail-scroll">
-<div class="activity-tabs"><button id="activityTab" class="active">Activity Log</button><button id="logsTab">Application Logs</button></div>
-
-    <section class="activity-toolbar">
+    <div class="activity-tabs"><button id="activityTab" class="active">Activity Log</button><button id="logsTab">Application Logs</button></div>
+    <div class="filter-toggle-row"><button id="filterToggle" type="button" aria-expanded="false" aria-controls="filtersPanel">Show Filters</button></div>
+    <section class="activity-toolbar collapsed" id="filtersPanel" aria-hidden="true">
       <input id="application" placeholder="Application">
       <input id="instance" placeholder="Instance">
-      <input id="flow" placeholder="Flow / Category">
+      <input id="flow" placeholder="Flow">
       <select id="level"><option value="">All Levels</option><option>Trace</option><option>Debug</option><option>Information</option><option>Warning</option><option>Error</option><option>Critical</option></select>
       <input id="correlation" placeholder="Correlation ID">
       <input id="minutes" type="number" min="1" max="10080" value="60" placeholder="Minutes">
-      <input id="text" style="grid-column:span 2" placeholder="Search message, stage, code, detail…">
-      <button id="apply" class="primary">Apply</button>
-      <button id="reset">Reset</button>
+      <input id="text" class="wide" placeholder="Search message, stage, code, detail…">
+      <button id="apply">Apply Filter</button>
+      <button id="reset" class="secondary">Reset Filters</button>
     </section>
-
     <div class="activity-actions">
       <button id="pause">Pause</button>
-      <button id="follow">Follow Tail: On</button>
-      <button id="clear">Clear View</button>
+      <button id="follow">Tail: On</button>
+      <button id="clear">Clear</button>
       <span id="state" class="muted">CONNECTING…</span>
     </div>
-
-    <section class="activity-panel"><div id="view" class="activity-log"></div></section>
+    <section class="activity-panel"><div id="view" class="activity-log" tabindex="0" aria-label="Diagnostics activity results"></div></section>
+    <div id="filterSummary" class="filter-summary"><b>FILTER</b><span>None · 0 events</span></div>
   </main>
+  <aside class="flow-overlay" id="flowOverlay" hidden role="dialog" aria-modal="false" aria-labelledby="flowOverlayTitle">
+    <div class="flow-overlay-head"><span id="flowOverlayTitle">Flow Analyzer</span><span class="grow" id="flowOverlayContext"></span><button id="flowOverlayClose" type="button">Close</button></div>
+    <div class="flow-overlay-body" id="flowOverlayBody"></div>
+  </aside>
 </section>
 
 <script src="/session.js"></script>
 <script>
 const api='/api/engineering/diagnostics', $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-let mode='activity',paused=false,followTail=true,hiddenBefore=null;
+let mode='activity',paused=false,followTail=true,hiddenBefore=null,eventsNow=[],selectedKey=null,selectedEvent=null,overlayOpen=false,lastFocused=null;
 function recentStamp(v){const d=v?new Date(v):new Date();if(Number.isNaN(d.getTime()))return '--- -- ---- --:--:--';const mon=d.toLocaleString('en-US',{month:'short'});return mon+' '+String(d.getDate()).padStart(2,'0')+' '+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0')}
-function seedRecentTimestamps(){document.querySelectorAll('#liveLog .t').forEach(x=>{if(!x.textContent||x.textContent.includes('--:--:--'))x.textContent=recentStamp();});}
-seedRecentTimestamps();
-function updateBrandClock(){const d=new Date(),target=document.getElementById('brandDateTime');if(!target)return;const month=d.toLocaleString('en-US',{month:'short'}).toUpperCase(),day=String(d.getDate()).padStart(2,'0'),year=d.getFullYear(),hours=String(d.getHours()).padStart(2,'0'),minutes=String(d.getMinutes()).padStart(2,'0'),tt=d.getHours()>=12?'PM':'AM';target.textContent=month+' '+day+' '+year+' '+hours+':'+minutes+' '+tt;}updateBrandClock();setInterval(updateBrandClock,1000);
+document.querySelectorAll('#liveLog .t').forEach(x=>{if(!x.textContent||x.textContent.includes('--:--:--'))x.textContent=recentStamp();});
+function updateBrandClock(){const d=new Date(),target=$('brandDateTime');if(!target)return;const month=d.toLocaleString('en-US',{month:'short'}).toUpperCase(),day=String(d.getDate()).padStart(2,'0'),year=d.getFullYear(),hours=String(d.getHours()).padStart(2,'0'),minutes=String(d.getMinutes()).padStart(2,'0'),tt=d.getHours()>=12?'PM':'AM';target.textContent=month+' '+day+' '+year+' '+hours+':'+minutes+' '+tt;}updateBrandClock();setInterval(updateBrandClock,1000);
 function fmt(v){const d=new Date(v);return Number.isNaN(d.valueOf())?'—':recentStamp(d)+'.'+String(d.getMilliseconds()).padStart(3,'0')}
-function params(){
- const p=new URLSearchParams(),app=$('application').value.trim(),inst=$('instance').value.trim(),corr=$('correlation').value.trim(),text=$('text').value.trim(),m=parseInt($('minutes').value||'0',10);
- if(app)p.set('applicationId',app);if(inst)p.set('instanceId',inst);if(corr)p.set('correlationId',corr);if(text)p.set('text',text);if(m>0)p.set('since',new Date(Date.now()-m*60000).toISOString());p.set('take','1500');
- if(mode==='activity'){const flow=$('flow').value.trim();if(flow)p.set('flow',flow)}
- else {const cat=$('flow').value.trim(),lvl=$('level').value.trim();if(cat)p.set('category',cat);if(lvl)p.set('level',lvl)}
- return p;
-}
-function rowActivity(e){const detail=[e.stage,e.code,e.detail].filter(Boolean).join(' · ');return '<div class="activity-row"><span class="time">'+fmt(e.occurredAtUtc)+'</span><span class="app">'+esc(e.applicationId)+'</span><span class="flow">'+esc(e.flow)+'</span><span class="'+esc(e.outcome)+'">'+esc(e.outcome)+'</span><span class="detail" title="'+esc(detail)+'">'+esc(detail)+'</span></div>'}
-function rowLog(e){return '<div class="activity-row"><span class="time">'+fmt(e.timestampUtc)+'</span><span class="app">'+esc(e.applicationId)+'</span><span class="flow">'+esc(e.category)+'</span><span class="'+esc(e.level)+'">'+esc(e.level)+'</span><span class="detail" title="'+esc(e.message)+'">'+esc(e.message)+'</span></div>'}
-async function refresh(){
- if(paused)return;
- try{
-   const endpoint=mode==='activity'?'/activity':'/logs';
-   const r=await fetch(api+endpoint+'?'+params(),{cache:'no-store'});
-   if(r.status===401){location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);return}
-   if(!r.ok)throw new Error('HTTP '+r.status);
-   const x=await r.json();let events=x.events||[];
-   if(mode==='activity'){
-     try{
-       const sr=await fetch(api+'/status',{cache:'no-store'});
-       if(sr.ok){
-         const status=await sr.json();
-         const healthEvents=(status.observations||[])
-           .filter(o=>!['healthy','passed'].includes(String(o.health||o.state||o.status||'unknown').toLowerCase()))
-           .map(o=>({
-             occurredAtUtc:o.observedAtUtc,
-             applicationId:o.applicationId||o.name||'Application',
-             instanceId:o.instanceId||'',
-             flow:'Health',
-             stage:'HealthObservation',
-             outcome:['unhealthy','failed','critical','error'].includes(String(o.health||o.state||o.status||'').toLowerCase())?'Failed':'Warning',
-             detail:(o.health||o.state||o.status||'Unknown')+(o.summary?' · '+o.summary:'')
-           }));
-         events=[...events,...healthEvents].sort((a,b)=>new Date(a.occurredAtUtc||a.timestampUtc)-new Date(b.occurredAtUtc||b.timestampUtc));
-       }
-     }catch{}
-   }
-   if(hiddenBefore)events=events.filter(e=>new Date(e.occurredAtUtc||e.timestampUtc)>hiddenBefore);
-   $('view').innerHTML=events.length?events.map(mode==='activity'?rowActivity:rowLog).join(''):'<div class="empty">No events match this filter.</div>';
-   $('state').textContent=events.length+' EVENTS · '+new Date().toLocaleTimeString();$('lastScan').textContent='Last Scan: '+new Date().toLocaleString();
-   liveLog.innerHTML=events.slice(-4).map(e=>'<div class="row"><span class="t">'+fmt(e.occurredAtUtc||e.timestampUtc)+'</span> <span class="inf">INF</span> <span class="src">['+esc(e.applicationId)+']</span> '+esc(e.detail||e.message||e.stage||'Event')+'</div>').join('')||'<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Activity]</span> No matching events</div>';
-   if(followTail)$('view').scrollTop=$('view').scrollHeight;
- }catch(e){$('state').textContent='ACTIVITY UNAVAILABLE · '+e.message}
-}
-function tabs(){$('activityTab').classList.toggle('active',mode==='activity');$('logsTab').classList.toggle('active',mode==='logs');$('level').disabled=mode==='activity';$('flow').placeholder=mode==='activity'?'Flow':'Category'}
-$('activityTab').onclick=()=>{mode='activity';tabs();refresh()};$('logsTab').onclick=()=>{mode='logs';tabs();refresh()};
-$('apply').onclick=refresh;$('reset').onclick=()=>{for(const id of ['application','instance','flow','level','correlation','text'])$(id).value='';$('minutes').value='60';hiddenBefore=null;refresh()};
-$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Resume':'Pause';if(!paused)refresh()};
-$('follow').onclick=()=>{followTail=!followTail;$('follow').textContent='Follow Tail: '+(followTail?'On':'Off')};
-$('clear').onclick=()=>{hiddenBefore=new Date();$('view').innerHTML='<div class="empty">View cleared. New events will appear here.</div>'};
+function params(){const p=new URLSearchParams(),app=$('application').value.trim(),inst=$('instance').value.trim(),corr=$('correlation').value.trim(),text=$('text').value.trim(),m=parseInt($('minutes').value||'0',10);if(app)p.set('applicationId',app);if(inst)p.set('instanceId',inst);if(corr)p.set('correlationId',corr);if(text)p.set('text',text);if(m>0)p.set('since',new Date(Date.now()-m*60000).toISOString());p.set('take','1500');if(mode==='activity'){const flow=$('flow').value.trim();if(flow)p.set('flow',flow)}else{const cat=$('flow').value.trim(),lvl=$('level').value.trim();if(cat)p.set('category',cat);if(lvl)p.set('level',lvl)}return p}
+function filterLabel(){const parts=[],add=(id,label)=>{const v=$(id).value.trim();if(v)parts.push(label+'='+v)};add('application','App');add('instance','Instance');add('flow',mode==='activity'?'Flow':'Category');if(mode==='logs')add('level','Level');add('correlation','Correlation');add('text','Text');const m=parseInt($('minutes').value||'0',10);if(m>0)parts.push('Last '+m+'m');return parts.length?parts.join(' · '):'None'}
+function updateSummary(count){$('filterSummary').innerHTML='<b>FILTER</b><span>'+esc(filterLabel())+' · '+count+' '+(mode==='logs'?'logs':'events')+'</span>'}
+function setFiltersOpen(open){$('filtersPanel').classList.toggle('collapsed',!open);$('filtersPanel').setAttribute('aria-hidden',String(!open));$('filterToggle').setAttribute('aria-expanded',String(open));$('filterToggle').textContent=open?'Hide Filters':'Show Filters'}
+$('filterToggle').onclick=()=>setFiltersOpen($('filtersPanel').classList.contains('collapsed'));
+function eventKey(e){return String(e.eventId||[e.occurredAtUtc||e.timestampUtc,e.applicationId,e.instanceId,e.correlationId,e.stage||e.category,e.code||e.message].join('|'))}
+function detailText(e){return mode==='activity'?[e.stage,e.code,e.detail].filter(Boolean).join(' · '):String(e.message||'')}
+function rowMarkup(e){const key=esc(eventKey(e)),when=e.occurredAtUtc||e.timestampUtc,flow=mode==='activity'?e.flow:e.category,status=mode==='activity'?e.outcome:e.level,corr=e.correlationId||'';return '<div class="activity-row" tabindex="-1" data-key="'+key+'"><span class="time">'+fmt(when)+'</span><span class="app">'+esc(e.applicationId)+'</span><span class="flow">'+esc(flow)+'</span><span class="status '+esc(status)+'">'+esc(status)+'</span><span class="detail" title="'+esc(detailText(e))+'">'+esc(detailText(e))+'</span><button class="analyze" type="button" data-correlation="'+esc(corr)+'">'+(corr?'Analyze →':'—')+'</button></div>'}
+function selectEvent(e,focus=false){if(!e)return;selectedKey=eventKey(e);selectedEvent=e;document.querySelectorAll('#view .activity-row').forEach(r=>r.classList.toggle('active',r.dataset.key===selectedKey));const active=document.querySelector('#view .activity-row.active');if(active){active.scrollIntoView({block:'nearest'});if(focus)active.focus({preventScroll:true})}if(overlayOpen)refreshOverlay()}
+function restoreSelection(){if(!eventsNow.length){selectedKey=null;selectedEvent=null;return}selectEvent(eventsNow.find(e=>eventKey(e)===selectedKey)||eventsNow[0])}
+function bindRows(){document.querySelectorAll('#view .activity-row').forEach(row=>{row.onclick=e=>{if(e.target.closest('.analyze'))return;selectEvent(eventsNow.find(x=>eventKey(x)===row.dataset.key),true)};row.onfocus=()=>selectEvent(eventsNow.find(x=>eventKey(x)===row.dataset.key))});$('view').onkeydown=e=>{if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;e.preventDefault();if(!eventsNow.length)return;let i=eventsNow.findIndex(x=>eventKey(x)===selectedKey);if(i<0)i=0;else i=Math.max(0,Math.min(eventsNow.length-1,i+(e.key==='ArrowDown'?1:-1)));selectEvent(eventsNow[i],true)};document.querySelectorAll('#view .analyze').forEach(b=>b.onclick=()=>{if(b.dataset.correlation)openAnalyzer(b.dataset.correlation)})}
+function emptyMarkup(){return '<div class="empty">No '+(mode==='logs'?'application logs':'activity events')+' match the active filters.<br><button type="button" onclick="resetFilters()">Reset Filters</button></div>'}
+async function refreshOverlay(){if(!overlayOpen)return;const e=selectedEvent,c=e?.correlationId;$('flowOverlayContext').textContent=e?[(e.applicationId||''),(mode==='activity'?e.flow:e.category)||'',c||'No correlation ID'].filter(Boolean).join(' · '):'No event selected';if(!c){$('flowOverlayBody').innerHTML='<div class="overlay-empty">The selected event has no correlation ID, so no system flow can be resolved.</div>';return}$('flowOverlayBody').innerHTML='<div class="overlay-empty">Loading observed flow…</div>';try{const p=new URLSearchParams();p.set('correlationId',c);p.set('take','250');const r=await fetch(api+'/flows?'+p,{cache:'no-store'});if(r.status===401){location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname);return}if(!r.ok)throw new Error('HTTP '+r.status);const x=await r.json(),traces=x.traces||[];$('flowOverlayBody').innerHTML=traces.length?traces.map(t=>'<article class="trace"><div class="trace-head"><b class="'+esc(t.status)+'">'+esc(t.status)+'</b><div class="grow"><b>'+esc(t.flow)+'</b><div class="trace-meta">'+esc(t.applicationId)+' / '+esc(t.instanceId)+' · '+esc(t.correlationId)+'</div></div><div class="trace-meta">'+t.durationMs+' ms · '+t.eventCount+' events</div></div><div class="stages">'+(t.stages||[]).map(s=>'<div class="stage"><div class="lamp '+esc(s.outcome)+'"></div><b>'+esc(s.stage)+'</b><small>'+esc(s.outcome)+' · '+fmt(s.occurredAtUtc)+'</small></div>').join('')+'</div></article>').join(''):'<div class="overlay-empty">No correlated lifecycle flow has been observed for this event.</div>'}catch(err){$('flowOverlayBody').innerHTML='<div class="overlay-empty">Flow unavailable · '+esc(err.message)+'</div>'}}
+function openAnalyzer(c){const match=eventsNow.find(e=>e.correlationId===c);if(match){selectedEvent=match;selectedKey=eventKey(match);selectEvent(match)}overlayOpen=true;lastFocused=document.activeElement;$('flowOverlay').hidden=false;refreshOverlay()}
+function closeAnalyzer(){overlayOpen=false;$('flowOverlay').hidden=true;if(lastFocused?.focus)lastFocused.focus({preventScroll:true})}
+$('flowOverlayClose').onclick=closeAnalyzer;document.addEventListener('keydown',e=>{if(e.key==='Escape'&&overlayOpen)closeAnalyzer()});
+async function refresh(){if(paused)return;try{const endpoint=mode==='activity'?'/activity':'/logs',r=await fetch(api+endpoint+'?'+params(),{cache:'no-store'});if(r.status===401){location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);return}if(!r.ok)throw new Error('HTTP '+r.status);const x=await r.json();let events=x.events||[];if(mode==='activity'){try{const sr=await fetch(api+'/status',{cache:'no-store'});if(sr.ok){const status=await sr.json(),healthEvents=(status.observations||[]).filter(o=>!['healthy','passed'].includes(String(o.health||o.state||o.status||'unknown').toLowerCase())).map(o=>({occurredAtUtc:o.observedAtUtc,applicationId:o.applicationId||o.name||'Application',instanceId:o.instanceId||'',flow:'Health',stage:'HealthObservation',outcome:['unhealthy','failed','critical','error'].includes(String(o.health||o.state||o.status||'').toLowerCase())?'Failed':'Warning',detail:(o.health||o.state||o.status||'Unknown')+(o.summary?' · '+o.summary:''),correlationId:o.correlationId||''}));events=[...events,...healthEvents].sort((a,b)=>new Date(a.occurredAtUtc||a.timestampUtc)-new Date(b.occurredAtUtc||b.timestampUtc))}}catch{}}if(hiddenBefore)events=events.filter(e=>new Date(e.occurredAtUtc||e.timestampUtc)>hiddenBefore);eventsNow=events;$('view').innerHTML=events.length?events.map(rowMarkup).join(''):emptyMarkup();bindRows();restoreSelection();$('state').textContent=events.length+' '+(mode==='logs'?'LOGS':'EVENTS')+' · '+new Date().toLocaleTimeString();$('lastScan').textContent='Last Scan: '+new Date().toLocaleString();updateSummary(events.length);liveLog.innerHTML=events.slice(-4).map(e=>'<div class="row"><span class="t">'+fmt(e.occurredAtUtc||e.timestampUtc)+'</span> <span class="inf">INF</span> <span class="src">['+esc(e.applicationId)+']</span> '+esc(e.detail||e.message||e.stage||'Event')+'</div>').join('')||'<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Activity]</span> No matching events</div>'}catch(e){$('state').textContent='ACTIVITY UNAVAILABLE · '+e.message}}
+function tabs(){$('activityTab').classList.toggle('active',mode==='activity');$('logsTab').classList.toggle('active',mode==='logs');$('level').disabled=mode==='activity';$('level').hidden=mode==='activity';$('flow').placeholder=mode==='activity'?'Flow':'Category';updateSummary(eventsNow.length)}
+$('activityTab').onclick=()=>{mode='activity';selectedKey=null;selectedEvent=null;tabs();refresh()};$('logsTab').onclick=()=>{mode='logs';selectedKey=null;selectedEvent=null;tabs();refresh()};
+$('apply').onclick=async()=>{await refresh();setFiltersOpen(false)};
+function resetFilters(){for(const id of ['application','instance','flow','level','correlation','text'])$(id).value='';$('minutes').value='60';hiddenBefore=null;selectedKey=null;selectedEvent=null;setFiltersOpen(false);refresh()}window.resetFilters=resetFilters;$('reset').onclick=resetFilters;
+$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Resume':'Pause';if(!paused)refresh()};$('follow').onclick=()=>{followTail=!followTail;$('follow').textContent='Tail: '+(followTail?'On':'Off')};$('clear').onclick=()=>{hiddenBefore=new Date();eventsNow=[];selectedKey=null;selectedEvent=null;$('view').innerHTML='<div class="empty">View cleared. New events will appear here.</div>';updateSummary(0)};
 tabs();refresh();setInterval(refresh,2000);
 </script>
 </body>

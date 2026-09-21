@@ -97,6 +97,7 @@ internal static class DiagnosticsApi
         app.MapPost("/api/engineering/diagnostics/runs/{runId:guid}/resolve", ResolveRunAsync);
         app.MapGet("/api/engineering/diagnostics/activity", ProxyOperationsActivityAsync);
         app.MapGet("/api/engineering/diagnostics/logs", ProxyOperationsLogsAsync);
+        app.MapGet("/api/engineering/diagnostics/flows", ProxyOperationsFlowsAsync);
         app.MapPost("/api/engineering/diagnostics/engineer-log", async (
             HttpContext context,
             IConfiguration configuration,
@@ -322,6 +323,18 @@ internal static class DiagnosticsApi
             factory,
             configuration,
             "/api/operations/logs",
+            ct);
+
+    private static Task<IResult> ProxyOperationsFlowsAsync(
+        HttpContext context,
+        IHttpClientFactory factory,
+        IConfiguration configuration,
+        CancellationToken ct) =>
+        ProxyOperationsAsync(
+            context,
+            factory,
+            configuration,
+            "/api/operations/activity/flows",
             ct);
 
     private static async Task<IResult> ProxyOperationsAsync(

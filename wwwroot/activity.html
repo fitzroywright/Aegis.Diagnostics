@@ -82,6 +82,26 @@ async function refresh(){
    if(r.status===401){location.href='/login?returnUrl='+encodeURIComponent(location.pathname);return}
    if(!r.ok)throw new Error('HTTP '+r.status);
    const x=await r.json();let events=x.events||[];
+   if(mode==='activity'){
+     try{
+       const sr=await fetch(api+'/status',{cache:'no-store'});
+       if(sr.ok){
+         const status=await sr.json();
+         const healthEvents=(status.observations||[])
+           .filter(o=>!['healthy','passed'].includes(String(o.health||o.state||o.status||'unknown').toLowerCase()))
+           .map(o=>({
+             occurredAtUtc:o.observedAtUtc,
+             applicationId:o.applicationId||o.name||'Application',
+             instanceId:o.instanceId||'',
+             flow:'Health',
+             stage:'HealthObservation',
+             outcome:['unhealthy','failed','critical','error'].includes(String(o.health||o.state||o.status||'').toLowerCase())?'Failed':'Warning',
+             detail:(o.health||o.state||o.status||'Unknown')+(o.summary?' · '+o.summary:'')
+           }));
+         events=[...events,...healthEvents].sort((a,b)=>new Date(a.occurredAtUtc||a.timestampUtc)-new Date(b.occurredAtUtc||b.timestampUtc));
+       }
+     }catch{}
+   }
    if(hiddenBefore)events=events.filter(e=>new Date(e.occurredAtUtc||e.timestampUtc)>hiddenBefore);
    $('view').innerHTML=events.length?events.map(mode==='activity'?rowActivity:rowLog).join(''):'<div class="empty">No events match this filter.</div>';
    $('state').textContent=events.length+' EVENTS · '+new Date().toLocaleTimeString();$('lastScan').textContent='Last Scan: '+new Date().toLocaleString();

@@ -53,7 +53,7 @@ async function load(){
   const systemHealth=document.getElementById('systemHealth');
   if(serviceSummary&&serviceState.toLowerCase()!=='healthy'){systemHealth.style.display='block';systemHealth.innerHTML='<b>'+esc(serviceState.toUpperCase())+'</b><div>'+esc(serviceSummary)+'</div>';}else{systemHealth.style.display='none';systemHealth.innerHTML='';}
   const [r,sr]=await Promise.all([get(api+'/targets'),get(api+'/status')]);
-  if(r.status===401||sr.status===401){ location.href='/login?returnUrl='+encodeURIComponent(location.pathname); return; }
+  if(r.status===401||sr.status===401){ location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash); return; }
   if(r.status===403||sr.status===403){targets.innerHTML='<div class="notice"><b>Permission required</b>Your account is signed in but does not have Diagnostics.View permission.</div>';incidents.innerHTML='<div class="incident muted">Permission required to load incidents.</div>';return;}
   if(!r.ok){targets.innerHTML=`<div class="notice"><b>Target inventory unavailable</b>The diagnostics target endpoint returned HTTP ${r.status}. Configuration discovery status: ${esc(h.discoveryStale?'stale':'current')}.</div>`;return;}
   if(!sr.ok){targets.innerHTML=`<div class="notice"><b>Live health unavailable</b>The diagnostics status endpoint returned HTTP ${sr.status}.</div>`;return;}

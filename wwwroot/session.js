@@ -10,7 +10,7 @@
 
   const redirectToLogin = () => {
     const returnUrl = encodeURIComponent(location.pathname + location.search + location.hash);
-    location.replace('/login?returnUrl=' + returnUrl);
+    location.replace('/auth/sso?returnUrl=' + returnUrl);
   };
 
   async function refreshIdentity() {

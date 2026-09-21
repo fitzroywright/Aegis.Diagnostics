@@ -89,12 +89,16 @@ async function loadEngineerNotes(){
 }
 async function saveEngineerNote(){
  const input=document.getElementById('engineerNoteText'),button=document.getElementById('engineerNoteSave');
- const text=input.value.trim();if(!text)return;
+ const text=input.value.trim();if(!text&&!pendingAudioBlob)return;
  button.disabled=true;
  try{
-  const r=await fetch(api+'/engineer-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  const form=new FormData();
+  form.append('text',text);
+  if(pendingAudioBlob)form.append('audio',pendingAudioBlob,pendingAudioName||'engineering-note.webm');
+  const r=await fetch(api+'/engineer-notes',{method:'POST',body:form});
   if(!r.ok)throw new Error(await r.text());
-  input.value='';window.aegisAudio?.play('success');await loadEngineerNotes();
+  input.value='';pendingAudioBlob=null;pendingAudioName=null;document.getElementById('engineerRecordState').textContent='NO AUDIO';
+  window.aegisAudio?.play('success');await loadEngineerNotes();
  }catch(e){alert('Unable to save engineering note: '+e.message);window.aegisAudio?.play('critical');}
  finally{button.disabled=false;}
 }

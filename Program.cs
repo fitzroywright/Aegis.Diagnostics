@@ -55,7 +55,7 @@ string configurationPublicUrl = AegisControlPlaneEndpoints.ResolvePublic(
     AegisControlPlaneService.Configuration,
     endpointLogger);
 app.MapSuiteSecurity(operationsPublicUrl, configurationPublicUrl);
-app.UseSuiteSecurity();
+app.UseSuiteSecurity(operationsPublicUrl);
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseDiagnosticsApiAuthorization(diagnosticsOptions);

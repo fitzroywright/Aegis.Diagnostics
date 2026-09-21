@@ -290,5 +290,11 @@ internal static class SuiteSecurityExtensions
             context.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new { signedOut = true });
         });
+        app.MapGet("/auth/logout", (HttpContext context, SuiteSecurity security) =>
+        {
+            security.Clear(context.Response);
+            context.Response.Headers.CacheControl = "no-store";
+            return Results.Redirect("/login");
+        });
     }
 }

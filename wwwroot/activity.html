@@ -65,7 +65,25 @@
   </aside>
 </section>
 
-<script src="/session.js"></script>
+<script src="/session.js">
+function installAegisConsoleAudio(){
+  const key='aegis.console.sound',enabled=()=>localStorage.getItem(key)!=='off';let ctx=null;
+  function tone(freq,duration,volume=.04,delay=0){if(!enabled())return;try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();const t=ctx.currentTime+delay,o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(volume,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+duration);o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+duration+.02)}catch{}}
+  const cues={
+    navigation:()=>{tone(1174.7,.025,.032);tone(1568,.032,.028,.032)},
+    success:()=>{tone(659.3,.035,.032);tone(987.8,.04,.034,.045);tone(1318.5,.045,.03,.095)},
+    warning:()=>{tone(587.3,.055,.04);tone(493.9,.075,.04,.09)},
+    critical:()=>{tone(392,.075,.05);tone(329.6,.085,.05,.105);tone(261.6,.12,.055,.215)},
+    complete:()=>{tone(784,.04,.03);tone(932.3,.045,.03,.05);tone(1174.7,.035,.028,.105)}
+  };
+  window.aegisAudio={play:name=>cues[name]?.(),enabled};
+  const arm=document.querySelector('.workspace-arm');
+  if(arm&&!document.getElementById('soundToggle')){const b=document.createElement('button');b.id='soundToggle';b.type='button';b.className='sound-toggle';const paint=()=>{b.textContent=enabled()?'♪':'×';b.title=enabled()?'Sound on':'Sound off';b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',String(enabled()))};paint();b.onclick=()=>{localStorage.setItem(key,enabled()?'off':'on');paint();if(enabled())cues.success()};arm.appendChild(b)}
+  document.querySelectorAll('.top-buttons a,.workspace-nav a,.lcars-back').forEach(x=>x.addEventListener('pointerdown',()=>cues.navigation()));
+}
+installAegisConsoleAudio();
+
+</script>
 <script>
 const api='/api/engineering/diagnostics', $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 let mode='activity',paused=false,followTail=true,hiddenBefore=null,eventsNow=[],selectedKey=null,selectedEvent=null,overlayOpen=false,lastFocused=null;

@@ -130,6 +130,15 @@ async function refreshControlPlaneHealthBanner(){
 }
 refreshControlPlaneHealthBanner();setInterval(refreshControlPlaneHealthBanner,30000);
 
+function normalizedRegisteredHealth(o){
+  const raw=o?.health??o?.state??o?.status??'unknown';
+  const value=String(raw).trim().toLowerCase();
+  if(value==='1')return 'healthy';
+  if(value==='2')return 'degraded';
+  if(value==='3')return 'unhealthy';
+  if(value==='0')return 'unknown';
+  return value;
+}
 async function refreshRegisteredApplicationHealth(){
   const host=document.querySelector('.detail-scroll');if(!host)return;
   let banner=document.getElementById('registeredApplicationHealthBanner');
@@ -138,10 +147,10 @@ async function refreshRegisteredApplicationHealth(){
     const response=await fetch('/api/engineering/diagnostics/status',{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const data=await response.json(),observations=data.observations||[];
-    const issues=observations.filter(o=>!['healthy','passed'].includes(String(o.state||o.status||o.health||'unknown').toLowerCase()));
+    const issues=observations.filter(o=>!['healthy','passed'].includes(normalizedRegisteredHealth(o)));
     if(!issues.length){banner.style.display='none';return;}
     const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-    banner.classList.toggle('critical',issues.some(o=>['unhealthy','failed','critical','error'].includes(String(o.state||o.status||o.health||'').toLowerCase())));
+    banner.classList.toggle('critical',issues.some(o=>['unhealthy','failed','critical','error'].includes(normalizedRegisteredHealth(o))));
     banner.innerHTML='<strong>REGISTERED APPLICATION HEALTH · '+issues.length+' ISSUE'+(issues.length===1?'':'S')+'</strong><div>'+issues.slice(0,8).map(o=>esc(o.applicationId||o.application||o.name||'Application')+' — '+esc(o.state||o.status||o.health||'Unknown')+(o.reason||o.summary||o.detail?' · '+esc(o.reason||o.summary||o.detail):'')).join('<br>')+(issues.length>8?'<br>+'+(issues.length-8)+' more':'')+'</div>';
     banner.style.display='block';
   }catch{banner.style.display='none';}

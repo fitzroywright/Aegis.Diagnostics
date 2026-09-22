@@ -17,14 +17,14 @@
 .incident-card .state{font-weight:900;margin-top:6px}.incident-card .state.bad{color:var(--sunset-red)}.incident-card .state.warn{color:var(--title-gold)}.incident-card .state.good{color:#55dd88}
 .incident-section{margin-bottom:18px}.incident-section h2{color:var(--arctic-ice);font-size:19px;margin:0 0 8px}.incident-empty{color:var(--muted);padding:14px;border:1px solid var(--line-soft);border-radius:9px}
 .sound-toggle{margin-left:10px;margin-right:14px;border:0;border-left:3px solid #000;background:#071018;color:var(--title-gold);width:34px;height:26px;padding:4px 7px;cursor:pointer;z-index:6;display:grid;place-items:center}
-</style>
+.top-buttons a.module-active{box-shadow:0 0 0 2px var(--title-gold),0 0 14px 3px rgba(255,204,102,.72),inset 0 1px 0 rgba(255,255,255,.28)!important;filter:brightness(1.06)}.top-buttons a.nav-flash{animation:moduleFlash .18s ease-out}@keyframes moduleFlash{0%{filter:brightness(1);transform:scale(1)}45%{filter:brightness(1.38);transform:scale(1.035)}100%{filter:brightness(1.06);transform:scale(1)}}</style>
 </head>
 <body>
 <header class="lcars-top">
   <div class="left-vertical"></div><div class="left-gold"></div><div class="bottom-arm"></div><div class="join-dot"></div>
   <div class="brand"><div class="section">Diagnostics</div><div class="org">Food For The Poor Jamaica</div><div class="datetime" id="brandDateTime"></div><div class="brand-user" id="brandUser">SIGNED IN</div></div>
   <div class="live-log"><div class="recent-title">Recent Logs</div><div class="recent-rows" id="liveLog"><div class="row"><span class="t">--:--:--</span> <span class="wrn">WRN</span> <span class="src">[Incidents]</span> Loading active incidents</div></div></div>
-  <div class="top-buttons"><a class="blue" href="/handoff/operations">Operations</a><a class="gray" href="/handoff/registration">Registration</a><a class="gold" href="/handoff/configuration">Configuration</a><a class="salmon" href="/">Diagnostics</a></div>
+  <div class="top-buttons"><a class="blue" href="/handoff/operations">Operations</a><a class="gray" href="/handoff/registration">Registration</a><a class="gold" href="/handoff/configuration">Configuration</a><a class="salmon module-active" href="/">Diagnostics</a></div>
 
   <a class="lcars-logout" href="/auth/logout">Logout</a></header>
 

@@ -120,7 +120,7 @@ public sealed class ConfigurationDiscoveryCatalog(
     private static DiagnosticTargetOptions ToTarget(ConfigurationApplicationContract contract)
     {
         ConfigurationDiagnosticsCapability capability = contract.Diagnostics!;
-        string baseUrl = ResolveBaseUrl(contract, capability.BaseUrlConfigurationKey);
+        string baseUrl = capability.BaseUrl?.Trim() ?? string.Empty;
         return new(
             contract.ApplicationId ?? string.Empty,
             string.IsNullOrWhiteSpace(contract.DisplayName) ? contract.ApplicationId ?? "Unknown application" : contract.DisplayName,
@@ -140,15 +140,6 @@ public sealed class ConfigurationDiscoveryCatalog(
             contract.Presentation?.IconUrl,
             contract.Presentation?.ShortName,
             contract.Presentation?.Accent);
-    }
-
-    private static string ResolveBaseUrl(ConfigurationApplicationContract contract, string? configurationKey)
-    {
-        if (string.IsNullOrWhiteSpace(configurationKey)) return string.Empty;
-        ConfigurationRequirementContract? requirement = contract.Requirements?.FirstOrDefault(item =>
-            string.Equals(item.ConfigurationKey, configurationKey, StringComparison.OrdinalIgnoreCase));
-        if (requirement is null || requirement.Sensitive) return string.Empty;
-        return requirement.SafeDisplayValue?.Trim() ?? string.Empty;
     }
 
     private void SetError(string message)
@@ -176,11 +167,11 @@ public sealed class ConfigurationDiscoveryCatalog(
 
     private sealed record ConfigurationRequirementContract(
         string? ConfigurationKey,
-        string? SafeDisplayValue,
+        string? DisplayValue,
         bool Sensitive = false);
 
     private sealed record ConfigurationDiagnosticsCapability(
-        string? BaseUrlConfigurationKey,
+        string? BaseUrl,
         string? HealthPath,
         string? DiagnosticsRunPath,
         string? DiagnosticsRunsPath,

@@ -156,7 +156,6 @@ public sealed class ConfigurationDiscoveryCatalog(
         string? SiteId,
         string? InstanceId,
         DateTimeOffset? LastRegisteredAtUtc,
-        ConfigurationRequirementContract[]? Requirements,
         ConfigurationDiagnosticsCapability? Diagnostics,
         ConfigurationPresentationContract? Presentation);
 
@@ -164,11 +163,6 @@ public sealed class ConfigurationDiscoveryCatalog(
         string? IconUrl,
         string? ShortName,
         string? Accent);
-
-    private sealed record ConfigurationRequirementContract(
-        string? ConfigurationKey,
-        string? DisplayValue,
-        bool Sensitive = false);
 
     private sealed record ConfigurationDiagnosticsCapability(
         string? BaseUrl,

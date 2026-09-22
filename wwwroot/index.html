@@ -66,6 +66,7 @@ function syncDiagnosticsNav(){
 window.addEventListener('hashchange',syncDiagnosticsNav);
 syncDiagnosticsNav();
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const byId=id=>document.getElementById(id);
 function appInitials(t){const src=String(t?.shortName||t?.name||t?.applicationId||'AE').replace(/^Aegis[. ]/i,'');const parts=src.split(/[ ._-]+/).filter(Boolean);return parts.length>1?(parts[0][0]+parts[1][0]).toUpperCase():src.slice(0,2).toUpperCase()}
 function safeIconUrl(v){if(!v)return'';try{if(v.startsWith('/')&&!v.startsWith('//')&&!v.includes('..'))return v;const u=new URL(v,location.origin);return u.protocol==='https:'?u.href:''}catch{return''}}
 function appIcon(t){const initials=esc(appInitials(t)),url=safeIconUrl(String(t?.iconUrl||''));return url?'<span class="diag-appicon"><img src="'+esc(url)+'" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'"><span style="display:none">'+initials+'</span></span>':'<span class="diag-appicon">'+initials+'</span>'}
@@ -75,11 +76,13 @@ async function load(){
   const h=await fetch('/health',{cache:'no-store'}).then(r=>r.json());
   lastScan.textContent='Last Scan: '+localDateTime(h.utc);
   const serviceState=String(h.health||h.status||'Unknown');const serviceSummary=String(h.summary||'').trim();
-  const overviewStateCard=document.getElementById('overviewState')?.closest('.metric');if(overviewStateCard){overviewStateCard.classList.toggle('critical-card',serviceState.toLowerCase()==='unhealthy');overviewStateCard.classList.toggle('issue-card',['degraded','unknown'].includes(serviceState.toLowerCase()));}
-  overviewState.textContent=serviceState.toUpperCase();overviewState.className=serviceState;
-  total.textContent=h.discoveredTargets??0;overall.textContent=serviceState.toUpperCase();overall.className=serviceState;
-  overallCard.classList.toggle('critical-card',serviceState.toLowerCase()==='unhealthy');
-  overallCard.classList.toggle('issue-card',['degraded','unknown'].includes(serviceState.toLowerCase()));
+  const overviewStateEl=byId('overviewState'),overviewStateCard=overviewStateEl?.closest('.metric');
+  if(overviewStateEl){overviewStateEl.textContent=serviceState.toUpperCase();overviewStateEl.className=serviceState;}
+  if(overviewStateCard){overviewStateCard.classList.toggle('critical-card',serviceState.toLowerCase()==='unhealthy');overviewStateCard.classList.toggle('issue-card',['degraded','unknown'].includes(serviceState.toLowerCase()));}
+  const totalEl=byId('total'),overallEl=byId('overall'),overallCardEl=byId('overallCard');
+  if(totalEl)totalEl.textContent=h.discoveredTargets??0;
+  if(overallEl){overallEl.textContent=serviceState.toUpperCase();overallEl.className=serviceState;}
+  if(overallCardEl){overallCardEl.classList.toggle('critical-card',serviceState.toLowerCase()==='unhealthy');overallCardEl.classList.toggle('issue-card',['degraded','unknown'].includes(serviceState.toLowerCase()));}
   const systemHealth=document.getElementById('systemHealth');
   if(serviceSummary&&serviceState.toLowerCase()!=='healthy'){systemHealth.style.display='block';systemHealth.innerHTML='<b>'+esc(serviceState.toUpperCase())+'</b><div>'+esc(serviceSummary)+'</div>';}else{systemHealth.style.display='none';systemHealth.innerHTML='';}
   const [r,sr]=await Promise.all([get(api+'/targets'),get(api+'/status')]);
@@ -103,11 +106,49 @@ async function load(){
     const observed=o?.observedAtUtc?localDateTime(o.observedAtUtc):'Never';
     return `<article class="card" data-health="${state}"><div style="display:flex;gap:10px;align-items:center">${appIcon({...t,name,applicationId:appId})}<div><small>${esc(appId)}</small><h2 style="margin:2px 0">${esc(name)}</h2></div></div><b class="${state}">${esc(state)}</b><p>${esc(summary)}</p><small>Last observed: ${esc(observed)}</small><br><a href="/console.html">View Diagnostics →</a></article>`;
   });
-  targets.innerHTML=cards.length?cards.join(''):'<div class="notice"><b>No diagnostic-capable applications discovered</b><div>'+esc(serviceSummary||'No applications are currently available from Configuration discovery.')+'</div></div>';
-  healthy.textContent=counts.Healthy;degraded.textContent=counts.Degraded;unhealthy.textContent=counts.Unhealthy;total.textContent=allIds.size;degradedCard.classList.toggle('issue-card',counts.Degraded>0||counts.Unknown>0);unhealthyCard.classList.toggle('critical-card',counts.Unhealthy>0);
+  const targetsEl=byId('targets');
+  if(targetsEl)targetsEl.innerHTML=cards.length?cards.join(''):'<div class="notice"><b>No diagnostic-capable applications discovered</b><div>'+esc(serviceSummary||'No applications are currently available from Configuration discovery.')+'</div></div>';
+
+  const landscape=byId('diagnosticLandscape');
+  if(landscape){
+    const tiles=[...allIds].map(id=>{
+      const t=ts.find(x=>String(x.applicationId||x.name||'').toLowerCase()===id)||{};
+      const o=byApp[id]||{};
+      let state=String(o.health||'Unknown');if(!['Healthy','Degraded','Unhealthy','Unknown'].includes(state))state='Unknown';
+      const appId=o.applicationId||t.applicationId||t.name||id;
+      const name=o.name||t.name||appId;
+      const observed=o.observedAtUtc?localDateTime(o.observedAtUtc):'Never observed';
+      return '<a href="#systemHealth"><div style="display:flex;gap:9px;align-items:center">'+appIcon({...t,name,applicationId:appId})+'<div><b>'+esc(name)+'</b><small>'+esc(appId)+'</small></div></div><small class="'+esc(state)+'">'+esc(state)+'</small><small>Observed: '+esc(observed)+'</small></a>';
+    });
+    landscape.innerHTML=tiles.length?tiles.join(''):'<a><b>No diagnostic targets</b><small>Nothing is currently discoverable.</small></a>';
+  }
+
+  const healthyEl=byId('healthy'),degradedEl=byId('degraded'),unhealthyEl=byId('unhealthy'),totalHealthEl=byId('total');
+  if(healthyEl)healthyEl.textContent=counts.Healthy;if(degradedEl)degradedEl.textContent=counts.Degraded;if(unhealthyEl)unhealthyEl.textContent=counts.Unhealthy;if(totalHealthEl)totalHealthEl.textContent=allIds.size;
+  byId('degradedCard')?.classList.toggle('issue-card',counts.Degraded>0||counts.Unknown>0);
+  byId('unhealthyCard')?.classList.toggle('critical-card',counts.Unhealthy>0);
+
+  const attentionCount=counts.Degraded+counts.Unhealthy+counts.Unknown;
+  if(byId('overviewTargets'))byId('overviewTargets').textContent=allIds.size;
+  if(byId('overviewAttention'))byId('overviewAttention').textContent=attentionCount;
+  const attentionMetric=byId('overviewAttention')?.closest('.metric');
+  if(attentionMetric){attentionMetric.classList.toggle('critical-card',counts.Unhealthy>0);attentionMetric.classList.toggle('issue-card',counts.Unhealthy===0&&attentionCount>0);}
+
+  const rr=await get(api+'/runs?take=5');
+  if(rr.ok){
+    const runs=await rr.json();
+    if(byId('overviewRuns'))byId('overviewRuns').textContent=runs.length;
+    const runsTitle=byId('runsTitle');if(runsTitle)runsTitle.textContent=runs.length?('Recent Engineering Runs · '+runs.length):'Recent Engineering Runs · None';
+    const recentRuns=byId('recentRuns');
+    if(recentRuns)recentRuns.innerHTML=runs.length?runs.map(x=>{
+      const status=String(x.status||'Unknown'),bad=['Failed','Error','Critical','InterventionRequired'].includes(status),warn=['Warning','Unknown'].includes(status);
+      return '<article class="run"><div class="runmeta"><b>LEVEL '+esc(x.level)+'</b><br><small>'+localDateTime(x.startedAt)+'</small></div><div><b>'+esc(x.application)+'</b><small>'+(x.reason?esc(x.reason):'Diagnostic run')+'</small></div><div class="'+(bad?'status-Failed':warn?'status-Warning':'status-Passed')+'"><b>'+esc(status)+'</b></div></article>';
+    }).join(''):'<div class="run"><div><b class="Healthy">No recent diagnostic runs</b><small class="muted">No engineering diagnostics have been recorded recently.</small></div></div>';
+  }
+
   const healthFilter=new URLSearchParams(location.search).get('health');if(healthFilter&&healthFilter!=='All'){document.querySelectorAll('#targets .card').forEach(card=>card.style.display=card.dataset.health===healthFilter?'':'none');}
   const ir=await get(api+'/incidents?minutes=60');if(ir.ok){const inc=await ir.json();overviewIncidents.textContent=inc.length;const incidentMetric=overviewIncidents.closest('.metric');incidentMetric?.classList.toggle('critical-card',inc.length>0);const at=document.getElementById('attentionTitle');if(at)at.textContent=inc.length?('Current Attention · '+inc.length+' Active Incident'+(inc.length===1?'':'s')):'Current Attention · Clear';incidents.innerHTML=inc.length?inc.map(i=>`<div class="incident"><b class="Unhealthy">${esc(i.summary)}</b><div class="muted">${esc((i.applications||[]).join(', '))}</div></div>`).join(''):'<div class="incident"><b class="Healthy">No active incidents</b><div class="muted">No current conditions require operator attention.</div></div>';liveLog.innerHTML=(inc.length?inc.slice(0,3).map(i=>'<div class="row"><span class="t">'+recentStamp()+'</span> <span class="wrn">WRN</span> <span class="src">[Incident]</span> '+esc(i.summary)+'</div>'):[ '<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> No active incidents</div>' ]).join('');}
- }catch{lastScan.textContent='Last Scan: UNAVAILABLE';targets.innerHTML='<div class="card">Unable to load diagnostics data.</div>';}
+ }catch(err){console.error('Diagnostics overview load failed',err);const ls=byId('lastScan');if(ls)ls.textContent='Last Scan: UNAVAILABLE';const landscape=byId('diagnosticLandscape');if(landscape)landscape.innerHTML='<a><b class="Unhealthy">Diagnostics data unavailable</b><small>'+esc(err?.message||'Unable to load diagnostic state.')+'</small></a>';const targetsEl=byId('targets');if(targetsEl)targetsEl.innerHTML='<div class="card"><b class="Unhealthy">Unable to load diagnostics data.</b></div>';}
 }
 async function refreshRecentLogs(){
  try{

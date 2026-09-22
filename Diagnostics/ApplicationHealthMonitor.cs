@@ -96,7 +96,7 @@ public sealed class ApplicationHealthMonitor(
         catch (HttpRequestException exception)
         {
             stopwatch.Stop();
-            state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, OperationalHealth.Unknown, observedAt, stopwatch.ElapsedMilliseconds, null, $"Health endpoint is unreachable ({exception.GetType().Name}); current health is unknown."));
+            state.Set(new(target.ApplicationId, target.Name, target.SiteId, target.InstanceId, OperationalHealth.Unhealthy, observedAt, stopwatch.ElapsedMilliseconds, null, $"Health endpoint is unreachable ({exception.GetType().Name}); application is offline or unavailable."));
         }
     }
 }

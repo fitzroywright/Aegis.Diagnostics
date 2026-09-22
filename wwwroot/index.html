@@ -67,6 +67,18 @@ window.addEventListener('hashchange',syncDiagnosticsNav);
 syncDiagnosticsNav();
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const byId=id=>document.getElementById(id);
+function healthName(v){
+ const s=String(v??'').trim();
+ if(s==='0')return 'Unknown';
+ if(s==='1')return 'Healthy';
+ if(s==='2')return 'Degraded';
+ if(s==='3')return 'Unhealthy';
+ const n=s.toLowerCase();
+ if(n==='healthy')return 'Healthy';
+ if(n==='degraded'||n==='warning')return 'Degraded';
+ if(n==='unhealthy'||n==='failed'||n==='offline')return 'Unhealthy';
+ return 'Unknown';
+}
 function appInitials(t){const src=String(t?.shortName||t?.name||t?.applicationId||'AE').replace(/^Aegis[. ]/i,'');const parts=src.split(/[ ._-]+/).filter(Boolean);return parts.length>1?(parts[0][0]+parts[1][0]).toUpperCase():src.slice(0,2).toUpperCase()}
 function safeIconUrl(v){if(!v)return'';try{if(v.startsWith('/')&&!v.startsWith('//')&&!v.includes('..'))return v;const u=new URL(v,location.origin);return u.protocol==='https:'?u.href:''}catch{return''}}
 function appIcon(t){const initials=esc(appInitials(t)),url=safeIconUrl(String(t?.iconUrl||''));return url?'<span class="diag-appicon"><img src="'+esc(url)+'" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'"><span style="display:none">'+initials+'</span></span>':'<span class="diag-appicon">'+initials+'</span>'}
@@ -97,14 +109,13 @@ async function load(){
   const cards=[...allIds].map(id=>{
     const t=ts.find(x=>String(x.applicationId||x.name||'').toLowerCase()===id)||{};
     const o=byApp[id];
-    let state=String(o?.health||'Unknown');
-    if(!['Healthy','Degraded','Unhealthy','Unknown'].includes(state))state='Unknown';
+    let state=healthName(o?.health);
     counts[state]++;
     const appId=o?.applicationId||t.applicationId||t.name||id;
     const name=o?.name||t.name||appId;
     const summary=o?.summary||'No live health observation recorded.';
-    const observed=o?.observedAtUtc?localDateTime(o.observedAtUtc):'Never';
-    return `<article class="card" data-health="${state}"><div style="display:flex;gap:10px;align-items:center">${appIcon({...t,name,applicationId:appId})}<div><small>${esc(appId)}</small><h2 style="margin:2px 0">${esc(name)}</h2></div></div><b class="${state}">${esc(state)}</b><p>${esc(summary)}</p><small>Last observed: ${esc(observed)}</small><br><a href="/console.html">View Diagnostics →</a></article>`;
+    const observed=o?.observedAtUtc?localDateTime(o.observedAtUtc):'Never observed';
+    return `<article class="card" data-health="${state}"><div style="display:flex;gap:10px;align-items:center">${appIcon({...t,name,applicationId:appId})}<div><small>${esc(appId)}</small><h2 style="margin:2px 0">${esc(name)}</h2></div></div><b class="${state}">${esc(state)}</b><p>${esc(summary)}</p><small>${observed==='Never observed'?'Observation: Never':'Observed: '+esc(observed)}</small><br><a href="/console.html">View Diagnostics →</a></article>`;
   });
   const targetsEl=byId('targets');
   if(targetsEl)targetsEl.innerHTML=cards.length?cards.join(''):'<div class="notice"><b>No diagnostic-capable applications discovered</b><div>'+esc(serviceSummary||'No applications are currently available from Configuration discovery.')+'</div></div>';
@@ -114,7 +125,7 @@ async function load(){
     const tiles=[...allIds].map(id=>{
       const t=ts.find(x=>String(x.applicationId||x.name||'').toLowerCase()===id)||{};
       const o=byApp[id]||{};
-      let state=String(o.health||'Unknown');if(!['Healthy','Degraded','Unhealthy','Unknown'].includes(state))state='Unknown';
+      let state=healthName(o.health);
       const appId=o.applicationId||t.applicationId||t.name||id;
       const name=o.name||t.name||appId;
       const observed=o.observedAtUtc?localDateTime(o.observedAtUtc):'Never observed';

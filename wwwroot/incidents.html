@@ -8,8 +8,14 @@
 <style>
 .incident-list{display:grid;gap:10px}
 .incident-card{border:1px solid var(--line-soft);border-top:2px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(8,27,42,.50),rgba(1,7,12,.40));padding:14px}
+.incident-card{font-family:"Segoe UI",Arial,sans-serif}
 .incident-card b{color:var(--title-gold)}
+.incident-card.active.bad{border-color:#b94832;border-top-color:var(--sunset-red);background:#2c0f0c}
+.incident-card.active.warn{border-color:#8d6b27;border-top-color:var(--title-gold);background:#241b08}
+.incident-card.resolved{border-color:#285b45;border-top-color:#55dd88;background:#07150f}
 .incident-card .apps,.incident-card .meta{color:var(--muted);margin-top:5px}
+.incident-card .state{font-weight:900;margin-top:6px}.incident-card .state.bad{color:var(--sunset-red)}.incident-card .state.warn{color:var(--title-gold)}.incident-card .state.good{color:#55dd88}
+.incident-section{margin-bottom:18px}.incident-section h2{color:var(--arctic-ice);font-size:19px;margin:0 0 8px}.incident-empty{color:var(--muted);padding:14px;border:1px solid var(--line-soft);border-radius:9px}
 .sound-toggle{margin-left:10px;margin-right:14px;border:0;border-left:3px solid #000;background:#071018;color:var(--title-gold);width:34px;height:26px;padding:4px 7px;cursor:pointer;z-index:6;display:grid;place-items:center}
 </style>
 </head>
@@ -26,8 +32,10 @@
   <nav class="workspace-nav"><a href="/"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a><a href="/#systemHealth"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.2-5 3.2 10 2.3-5H21"/></svg><span>Health</span></a><a href="/console.html"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6.5 3-3 3 3-3 3M16 8 8 16"/><path d="m9 15-4.5 4.5a2.1 2.1 0 0 1-3-3L6 12"/></svg><span>Engineering</span></a><a class="active" href="/incidents.html"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg><span>Incidents</span></a><a href="/activity.html"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h10"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg><span>Logs</span></a></nav>
   <button class="lcars-back" type="button" onclick="if(history.length>1){history.back()}else{location.href='/'}">Back</button>
   <main class="detail-scroll">
-    <section class="page-head"><div><p>Current correlated diagnostic conditions requiring operator attention.</p></div></section>
-    <section id="incidents" class="incident-list"><div class="incident-card muted">Loading incidents…</div></section>
+    <section class="page-head"><div><p>Operational incidents open when a registered application becomes unhealthy, unavailable, degraded, or otherwise loses trustworthy health. Recovery resolves the incident but preserves its history.</p></div></section>
+    <section class="incident-section"><h2>Active Incidents</h2><div id="activeIncidents" class="incident-list"><div class="incident-card muted">Loading active incidents…</div></div></section>
+    <section class="incident-section"><h2>Correlated Conditions</h2><div id="correlatedIncidents" class="incident-list"><div class="incident-card muted">Loading correlation…</div></div></section>
+    <section class="incident-section"><h2>Resolved History</h2><div id="resolvedIncidents" class="incident-list"><div class="incident-card muted">Loading resolved incidents…</div></div></section>
   </main>
 </section>
 
@@ -43,18 +51,34 @@ loadBrandUser();
 document.querySelectorAll('.top-buttons a,.workspace-nav a').forEach(a=>a.addEventListener('pointerdown',()=>{a.classList.add('nav-flash');setTimeout(()=>a.classList.remove('nav-flash'),180)}));
 
 
+function healthName(v){const s=String(v??'').trim();if(s==='0')return'Unknown';if(s==='1')return'Healthy';if(s==='2')return'Degraded';if(s==='3')return'Unhealthy';const n=s.toLowerCase();if(n==='healthy')return'Healthy';if(n==='degraded'||n==='warning')return'Degraded';if(n==='unhealthy'||n==='failed'||n==='offline')return'Unhealthy';return'Unknown'}
+function duration(start,end){const a=new Date(start),b=new Date(end||Date.now());if(Number.isNaN(a.getTime())||Number.isNaN(b.getTime()))return'—';let s=Math.max(0,Math.floor((b-a)/1000));if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+(s%60)+'s';if(s<86400)return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';return Math.floor(s/86400)+'d '+Math.floor((s%86400)/3600)+'h'}
+function incidentCard(i){
+ const state=healthName(i.health),active=String(i.status).toLowerCase()==='active',tone=state==='Unhealthy'?'bad':state==='Healthy'?'good':'warn';
+ return '<article class="incident-card '+(active?'active '+tone:'resolved')+'"><b>'+esc(i.name||i.applicationId||'Application')+'</b><div class="state '+(active?tone:'good')+'">'+esc(active?state:'RESOLVED')+'</div><div>'+esc(i.summary||'Operational incident')+'</div><div class="apps">'+esc(i.applicationId||'')+'</div><div class="meta">Started '+localDateTime(i.startedAtUtc)+' · Last observed '+localDateTime(i.lastObservedAtUtc)+(active?' · Open '+duration(i.startedAtUtc):' · Resolved '+localDateTime(i.resolvedAtUtc)+' · Duration '+duration(i.startedAtUtc,i.resolvedAtUtc))+'</div></article>';
+}
 async function load(){
   try{
     await window.aegisSession?.refresh?.();
-    const r=await fetch(api+'/incidents?minutes=60',{cache:'no-store'});
-    if(r.status===401){location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname);return}
-    if(r.status===403){incidents.innerHTML='<div class="incident-card">Permission required to view incidents.</div>';return}
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const data=await r.json();
-    incidents.innerHTML=data.length?data.map(i=>'<article class="incident-card"><b>'+esc(i.summary||'Incident')+'</b><div class="apps">'+esc((i.applications||[]).join(', ')||'No application list')+'</div><div class="meta">'+esc(i.correlationId||i.id||'')+'</div></article>').join(''):'<div class="incident-card muted">No active incidents in the selected window.</div>';
+    const [opResponse,corrResponse]=await Promise.all([
+      fetch(api+'/operational-incidents?includeResolved=true',{cache:'no-store'}),
+      fetch(api+'/incidents?minutes=60',{cache:'no-store'})
+    ]);
+    if(opResponse.status===401||corrResponse.status===401){location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname);return}
+    if(opResponse.status===403){activeIncidents.innerHTML='<div class="incident-empty">Permission required to view incidents.</div>';return}
+    if(!opResponse.ok)throw new Error('Operational incidents HTTP '+opResponse.status);
+    const all=await opResponse.json(),active=(all||[]).filter(i=>String(i.status).toLowerCase()==='active'),resolved=(all||[]).filter(i=>String(i.status).toLowerCase()==='resolved');
+    activeIncidents.innerHTML=active.length?active.map(incidentCard).join(''):'<div class="incident-empty"><b class="Healthy">No active incidents</b><div>No registered application currently requires incident-level attention.</div></div>';
+    resolvedIncidents.innerHTML=resolved.length?resolved.slice(0,50).map(incidentCard).join(''):'<div class="incident-empty">No resolved incident history yet.</div>';
+
+    if(corrResponse.ok){
+      const corr=await corrResponse.json();
+      correlatedIncidents.innerHTML=corr.length?corr.map(i=>'<article class="incident-card active warn"><b>'+esc(i.summary||'Correlated condition')+'</b><div class="state warn">CORRELATED</div><div class="apps">'+esc((i.applications||[]).join(', ')||'Multiple applications')+'</div><div class="meta">Shared diagnostic evidence within the last 60 minutes.</div></article>').join(''):'<div class="incident-empty">No shared failure pattern is currently correlated across multiple applications.</div>';
+    }else correlatedIncidents.innerHTML='<div class="incident-empty">Correlation data unavailable.</div>';
+
     lastScan.textContent='Last Scan: '+recentStamp();
-    liveLog.innerHTML=(data.length?data.slice(0,5).map(i=>'<div class="row"><span class="t">'+recentStamp(i.occurredAtUtc||i.startedAtUtc||i.detectedAtUtc)+'</span> <span class="wrn">WRN</span> <span class="src">[Incident]</span> '+esc(i.summary||'Incident')+'</div>'):[ '<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> No active incidents</div>' ]).join('');
-  }catch(e){incidents.innerHTML='<div class="incident-card">Unable to load incidents · '+esc(e.message)+'</div>';lastScan.textContent='Last Scan: UNAVAILABLE'}
+    liveLog.innerHTML=(active.length?active.slice(0,5).map(i=>'<div class="row"><span class="t">'+recentStamp(i.startedAtUtc)+'</span> <span class="'+(healthName(i.health)==='Unhealthy'?'err':'wrn')+'">'+(healthName(i.health)==='Unhealthy'?'ERR':'WRN')+'</span> <span class="src">['+esc(i.applicationId||'Incident')+']</span> '+esc(i.summary||'Operational incident')+'</div>'):[ '<div class="row"><span class="t">'+recentStamp()+'</span> <span class="inf">INF</span> <span class="src">[Diagnostics]</span> No active incidents</div>' ]).join('');
+  }catch(e){activeIncidents.innerHTML='<div class="incident-card active bad"><b>Unable to load incidents</b><div>'+esc(e.message)+'</div></div>';lastScan.textContent='Last Scan: UNAVAILABLE'}
 }
 load();setInterval(load,10000);
 </script>

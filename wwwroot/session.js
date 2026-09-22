@@ -164,3 +164,5 @@ async function refreshRegisteredApplicationHealth(){
   }catch{banner.style.display='none';}
 }
 refreshRegisteredApplicationHealth();setInterval(refreshRegisteredApplicationHealth,30000);
+
+(()=>{const overlay=document.getElementById('aegisBusyOverlay'),label=document.getElementById('aegisBusyText');if(!overlay)return;let pending=0,timer=0;const show=(text='Analyzing system state')=>{pending++;if(label)label.textContent=text;clearTimeout(timer);timer=setTimeout(()=>{if(pending>0){overlay.classList.add('visible');overlay.setAttribute('aria-hidden','false')}},300)};const hide=()=>{pending=Math.max(0,pending-1);if(!pending){clearTimeout(timer);overlay.classList.remove('visible');overlay.setAttribute('aria-hidden','true')}};window.AegisBusy={show,hide,run:async(p,text)=>{show(text);try{return await p}finally{hide()}}};document.querySelectorAll('.top-buttons a,.workspace-nav a,.lcars-back').forEach(a=>a.addEventListener('click',()=>show('Routing control plane')));})();

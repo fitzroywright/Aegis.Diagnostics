@@ -94,6 +94,8 @@ internal static class DiagnosticsApi
         app.MapGet("/api/engineering/diagnostics/telemetry", GetTelemetryAsync);
         app.MapGet("/api/engineering/diagnostics/playbooks", (HttpContext c, DiagnosticPlaybookCatalog catalog) => View(c) ? Results.Ok(catalog.GetAll()) : Results.Forbid());
         app.MapGet("/api/engineering/diagnostics/incidents", GetIncidentsAsync);
+        app.MapGet("/api/engineering/diagnostics/operational-incidents", (bool? includeResolved, HttpContext context, OperationalIncidentStore store) =>
+            View(context) ? Results.Ok(store.GetAll(includeResolved ?? true)) : Results.Forbid());
         app.MapGet("/api/engineering/diagnostics/runs", GetRunsAsync);
         app.MapGet("/api/engineering/diagnostics/runs/{runId:guid}", GetRunAsync);
         app.MapPost("/api/engineering/diagnostics/run", RunDiagnosticsAsync);

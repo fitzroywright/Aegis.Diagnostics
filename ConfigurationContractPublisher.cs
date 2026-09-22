@@ -49,7 +49,10 @@ public sealed class ConfigurationContractPublisher(
             contract["runtimeEnvironment"] = DetectedRuntimeEnvironment.Capture(environment.EnvironmentName, environment.ContentRootPath);
 
             if (contract["diagnostics"] is JsonObject diagnostics)
+            {
+                diagnostics["baseUrl"] = NullIfBlank(configuration["Aegis:PublicUrl"]);
                 diagnostics["secretName"] = options.MachineCredentialSecretName;
+            }
 
             if (contract["requirements"] is JsonArray requirements)
             {
@@ -125,8 +128,8 @@ public sealed class ConfigurationContractPublisher(
         requirement["effectiveValueAvailable"] = configured || hasDefault;
         requirement["configurationState"] = configured ? "Configured" : hasDefault ? "Default" : "Unresolved";
         requirement["effectiveSource"] = configured ? "Resolved IConfiguration" : hasDefault ? "Runtime/Code Default" : "Unresolved";
-        requirement.Remove("safeDisplayValue");
-        if (configured || hasDefault) requirement["safeDisplayValue"] = value ?? codeDefault;
+        requirement.Remove("displayValue");
+        if (configured || hasDefault) requirement["displayValue"] = value ?? codeDefault;
     }
 
     private async Task UpdateSecretRequirementAsync(JsonArray requirements, string id, string secretName, CancellationToken cancellationToken)
@@ -153,7 +156,7 @@ public sealed class ConfigurationContractPublisher(
         requirement["configurationState"] = configured == true ? "Configured" : configured == false ? "Unresolved" : "Unknown";
         requirement["effectiveSource"] = "Common.Secrets";
         requirement["verificationStatus"] = verification;
-        requirement.Remove("safeDisplayValue");
+        requirement.Remove("displayValue");
     }
 
     private void AddSecretManagerMetadata(JsonArray requirements, JsonObject contract)
@@ -193,8 +196,8 @@ public sealed class ConfigurationContractPublisher(
         requirement["effectiveValueAvailable"] = configured;
         requirement["configurationState"] = configured ? "Configured" : "Unresolved";
         requirement["effectiveSource"] = configured ? "Common.Secrets" : "Unresolved";
-        requirement.Remove("safeDisplayValue");
-        if (configured) requirement["safeDisplayValue"] = value;
+        requirement.Remove("displayValue");
+        if (configured) requirement["displayValue"] = value;
     }
 
     private static JsonObject? Find(JsonArray requirements, string id)

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Operator-facing operational health, history, incident correlation and engineering diagnostics console.",
   "diagnostics": {
-    "baseUrlConfigurationKey": "Aegis:PublicUrl",
+    "baseUrl": null,
     "healthPath": "/health",
     "diagnosticsRunPath": "/api/engineering/diagnostics/run",
     "diagnosticsRunsPath": "/api/engineering/diagnostics/runs",

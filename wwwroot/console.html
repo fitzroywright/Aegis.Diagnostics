@@ -104,13 +104,13 @@ async function saveEngineerNote(){
 }
 document.getElementById('engineerNoteSave').addEventListener('click',saveEngineerNote);
 
-const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);return Number.isNaN(d.getTime())?String(v??'—'):d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'});};
+const localDateTime=v=>{const d=v instanceof Date?v:new Date(v);if(Number.isNaN(d.getTime()))return String(v??'—');const mon=d.toLocaleString('en-US',{month:'short'});let h=d.getHours(),tt=h>=12?'PM':'AM';h=h%12||12;return mon+' '+String(d.getDate()).padStart(2,'0')+' '+d.getFullYear()+' '+String(h).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+' '+tt;};
 const localZone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
-function recentStamp(v){const d=v?new Date(v):new Date();if(Number.isNaN(d.getTime()))return '--- -- ---- --:--:--';const mon=d.toLocaleString('en-US',{month:'short'});return mon+' '+String(d.getDate()).padStart(2,'0')+' '+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0')}
+function recentStamp(v){const d=v?new Date(v):new Date();if(Number.isNaN(d.getTime()))return '--- -- ---- --:-- --';const mon=d.toLocaleString('en-US',{month:'short'});let h=d.getHours(),tt=h>=12?'PM':'AM';h=h%12||12;return mon+' '+String(d.getDate()).padStart(2,'0')+' '+d.getFullYear()+' '+String(h).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+' '+tt}
 function seedRecentTimestamps(){document.querySelectorAll('#liveLog .t').forEach(x=>{if(!x.textContent||x.textContent.includes('--:--:--'))x.textContent=recentStamp();});}
 seedRecentTimestamps();
 function markLastScan(v){const e=document.getElementById('lastScan');if(e)e.textContent='Last Scan: '+localDateTime(v||new Date());}
-function updateBrandClock(){const d=new Date(),target=document.getElementById('brandDateTime');if(!target)return;const month=d.toLocaleString('en-US',{month:'short'}).toUpperCase(),day=String(d.getDate()).padStart(2,'0'),year=d.getFullYear(),hours=String(d.getHours()).padStart(2,'0'),minutes=String(d.getMinutes()).padStart(2,'0'),tt=d.getHours()>=12?'PM':'AM';target.textContent=month+' '+day+' '+year+' '+hours+':'+minutes+' '+tt;}updateBrandClock();setInterval(updateBrandClock,1000);
+function updateBrandClock(){const d=new Date(),target=document.getElementById('brandDateTime')||document.getElementById('brandDateTime');if(!target)return;const month=d.toLocaleString('en-US',{month:'short'}).toUpperCase(),day=String(d.getDate()).padStart(2,'0'),year=d.getFullYear();let h=d.getHours(),tt=h>=12?'PM':'AM';h=h%12||12;target.textContent=month+' '+day+' '+year+' '+String(h).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+' '+tt;}updateBrandClock();setInterval(updateBrandClock,1000);
 document.querySelectorAll('.top-buttons a,.workspace-nav a').forEach(a=>a.addEventListener('pointerdown',()=>{a.classList.add('nav-flash');setTimeout(()=>a.classList.remove('nav-flash'),180)}));
 const statusName=v=>typeof v==='number'?({1:'Passed',2:'Warning',3:'Failed',4:'InterventionRequired'}[v]||v):v;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));

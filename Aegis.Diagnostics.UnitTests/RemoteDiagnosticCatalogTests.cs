@@ -148,7 +148,8 @@ public sealed class RemoteDiagnosticCatalogTests
             targetCatalog,
             configuration,
             stateExplain,
-            commonComponents);
+            commonComponents,
+            new CommonIsolatedCertificationCatalog());
     }
 
     private static RemoteDiagnosticCatalog CreateCatalog(HttpMessageHandler handler, bool requireCredential, bool includeCredential = false)
@@ -187,7 +188,7 @@ public sealed class RemoteDiagnosticCatalogTests
             targetCatalog,
             stateExplain,
             NullLogger<CommonComponentDiagnosticCatalog>.Instance);
-        return new RemoteDiagnosticCatalog(new TestHttpClientFactory(handler), options, targetCatalog, configuration, stateExplain, commonComponents);
+        return new RemoteDiagnosticCatalog(new TestHttpClientFactory(handler), options, targetCatalog, configuration, stateExplain, commonComponents, new CommonIsolatedCertificationCatalog());
     }
 
     private static EngineeringDiagnosticRun CreateRemoteRun(EngineeringDiagnosticStatus status)

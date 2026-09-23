@@ -45,7 +45,7 @@ internal static class DiagnosticsApi
         app.MapGet("/api/engineering/diagnostics/targets", (HttpContext c, IDiagnosticTargetCatalog discovery) =>
             View(c) ? Results.Ok(discovery.Targets) : Results.Forbid());
 
-        app.MapGet("/api/engineering/diagnostics/levelx/targets", (HttpContext c, IDiagnosticTargetCatalog discovery) =>
+        app.MapGet("/api/engineering/diagnostics/diagnostic-level/targets", (HttpContext c, IDiagnosticTargetCatalog discovery) =>
         {
             if (!View(c)) return Results.Forbid();
             return Results.Ok(new
@@ -85,13 +85,13 @@ internal static class DiagnosticsApi
             string applicationId,
             string? instanceId,
             HttpContext c,
-            LevelXStateExplainService explain,
+            DiagnosticLevelStateExplainService explain,
             CancellationToken ct) =>
         {
             if (!View(c)) return Results.Forbid();
             try
             {
-                LevelXStateExplanation? result = await explain.ExplainAsync(applicationId, instanceId, ct);
+                DiagnosticLevelStateExplanation? result = await explain.ExplainAsync(applicationId, instanceId, ct);
                 return result is null ? Results.NotFound() : Results.Ok(result);
             }
             catch (ArgumentException ex)
@@ -149,7 +149,7 @@ internal static class DiagnosticsApi
             return Results.Accepted();
         });
 
-        app.MapGet("/api/engineering/diagnostics/levelx/catalogue", (HttpContext c, CommonComponentDiagnosticCatalog commonComponents, CommonIsolatedCertificationCatalog isolatedCertifications) =>
+        app.MapGet("/api/engineering/diagnostics/diagnostic-level/catalogue", (HttpContext c, CommonComponentDiagnosticCatalog commonComponents, CommonIsolatedCertificationCatalog isolatedCertifications) =>
         {
             if (!View(c)) return Results.Forbid();
             return Results.Ok(new
@@ -235,7 +235,7 @@ internal static class DiagnosticsApi
             });
         });
 
-        app.MapGet("/api/engineering/diagnostics/levelx/history", async (
+        app.MapGet("/api/engineering/diagnostics/diagnostic-level/history", async (
             DateTimeOffset? fromUtc,
             DateTimeOffset? toUtc,
             string? application,
@@ -249,42 +249,42 @@ internal static class DiagnosticsApi
             string? version,
             int? take,
             HttpContext c,
-            ILevelXRunStore store,
+            IDiagnosticLevelRunStore store,
             CancellationToken ct) =>
         {
             if (!View(c)) return Results.Forbid();
             EngineeringDiagnosticLevel? parsedLevel = level is >= 1 and <= 5
                 ? (EngineeringDiagnosticLevel)level.Value
                 : null;
-            LevelXExecutionState? parsedState = Enum.TryParse<LevelXExecutionState>(state, true, out LevelXExecutionState stateValue)
+            DiagnosticLevelExecutionState? parsedState = Enum.TryParse<DiagnosticLevelExecutionState>(state, true, out DiagnosticLevelExecutionState stateValue)
                 ? stateValue
                 : null;
-            return Results.Ok(await store.QueryAsync(new LevelXHistoryQuery(
+            return Results.Ok(await store.QueryAsync(new DiagnosticLevelHistoryQuery(
                 fromUtc, toUtc, application, component, host, parsedLevel, parsedState, testId,
                 correlationId, requestedBy, version, Math.Clamp(take ?? 100, 1, 1000)), ct));
         });
 
-        app.MapGet("/api/engineering/diagnostics/levelx/history/{runId:guid}", async (
+        app.MapGet("/api/engineering/diagnostics/diagnostic-level/history/{runId:guid}", async (
             Guid runId,
             HttpContext c,
-            ILevelXRunStore store,
+            IDiagnosticLevelRunStore store,
             CancellationToken ct) =>
         {
             if (!View(c)) return Results.Forbid();
-            LevelXRunRecord? run = await store.GetAsync(runId, ct);
+            DiagnosticLevelRunRecord? run = await store.GetAsync(runId, ct);
             return run is null ? Results.NotFound() : Results.Ok(run);
         });
 
-        app.MapGet("/api/engineering/diagnostics/levelx/live", (
+        app.MapGet("/api/engineering/diagnostics/diagnostic-level/live", (
             HttpContext c,
-            RemoteLevelXCoordinator coordinator) =>
+            RemoteDiagnosticLevelCoordinator coordinator) =>
             View(c) ? Results.Ok(new { runs = coordinator.Pending }) : Results.Forbid());
 
-        app.MapPost("/api/engineering/diagnostics/levelx/callback", async (
-            LevelXCompletionCallback callback,
+        app.MapPost("/api/engineering/diagnostics/diagnostic-level/callback", async (
+            DiagnosticLevelCompletionCallback callback,
             HttpContext c,
-            RemoteLevelXCoordinator coordinator,
-            ILevelXRunStore store,
+            RemoteDiagnosticLevelCoordinator coordinator,
+            IDiagnosticLevelRunStore store,
             CancellationToken ct) =>
         {
             string applicationId = c.Request.Headers["X-Aegis-Application-Id"].ToString().Trim();
@@ -307,9 +307,9 @@ internal static class DiagnosticsApi
             if (!accepted)
                 return Results.Unauthorized();
 
-            LevelXRunRecord received = callback.Run with
+            DiagnosticLevelRunRecord received = callback.Run with
             {
-                DeliveryState = LevelXDeliveryState.Delivered
+                DeliveryState = DiagnosticLevelDeliveryState.Delivered
             };
             await store.SaveAsync(received, ct);
             return Results.Ok(new
@@ -318,7 +318,7 @@ internal static class DiagnosticsApi
                 callback.RequestId,
                 callback.CorrelationId,
                 duplicate,
-                delivery = LevelXDeliveryState.Delivered.ToString()
+                delivery = DiagnosticLevelDeliveryState.Delivered.ToString()
             });
         });
 

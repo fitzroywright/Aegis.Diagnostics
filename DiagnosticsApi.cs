@@ -144,6 +144,78 @@ internal static class DiagnosticsApi
             return Results.Accepted();
         });
 
+        app.MapGet("/api/engineering/diagnostics/levelx/catalogue", (HttpContext c) =>
+        {
+            if (!View(c)) return Results.Forbid();
+            return Results.Ok(new[]
+            {
+                new
+                {
+                    level = 5,
+                    name = "Routine",
+                    status = "IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Target selection",
+                        "Control Plane/component/application targeting",
+                        "Health probing",
+                        "Registration/telemetry freshness explanation",
+                        "State derivation mismatch detection",
+                        "Run history and evidence"
+                    }
+                },
+                new
+                {
+                    level = 4,
+                    name = "Integration",
+                    status = "PARTIALLY IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Remote diagnostics orchestration",
+                        "Cross-application target filtering",
+                        "Control Plane component selection",
+                        "Existing integration diagnostics from registered applications"
+                    }
+                },
+                new
+                {
+                    level = 3,
+                    name = "Functional",
+                    status = "PARTIALLY IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Remote functional diagnostics where applications advertise support",
+                        "Target-aware orchestration",
+                        "Registration lifecycle automation framework not yet complete"
+                    }
+                },
+                new
+                {
+                    level = 2,
+                    name = "Failure / Recovery",
+                    status = "PARTIALLY IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Explicit disruption acknowledgement",
+                        "Engineering reason gate",
+                        "Isolated failure/recovery probe execution not yet complete"
+                    }
+                },
+                new
+                {
+                    level = 1,
+                    name = "Exhaustive",
+                    status = "PARTIALLY IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Explicit disruption acknowledgement",
+                        "Exhaustive-level orchestration contract",
+                        "14-test isolated Registration certification runner not yet complete"
+                    }
+                }
+            });
+        });
+
         app.MapGet("/api/engineering/diagnostics/capabilities", (HttpContext c, RemoteDiagnosticCatalog catalog) => View(c) ? Results.Ok(catalog.GetCapabilities()) : Results.Forbid());
         app.MapGet("/api/engineering/diagnostics/telemetry", GetTelemetryAsync);
         app.MapGet("/api/engineering/diagnostics/playbooks", (HttpContext c, DiagnosticPlaybookCatalog catalog) => View(c) ? Results.Ok(catalog.GetAll()) : Results.Forbid());

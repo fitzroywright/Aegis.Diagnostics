@@ -42,12 +42,23 @@ internal static class DiagnosticsApi
 
         // Preserve the existing array response shape for the current Diagnostics UI. Inventory metadata
         // is exposed by /capabilities and health, while the target identities themselves come from Configuration.
-        app.MapGet("/api/engineering/diagnostics/targets", (HttpContext c, IDiagnosticTargetCatalog discovery) =>
-            View(c) ? Results.Ok(discovery.Targets) : Results.Forbid());
-
-        app.MapGet("/api/engineering/diagnostics/diagnostic-level/targets", (HttpContext c, IDiagnosticTargetCatalog discovery) =>
+        app.MapGet("/api/engineering/diagnostics/targets", async (
+            HttpContext c,
+            IDiagnosticTargetCatalog discovery,
+            CancellationToken ct) =>
         {
             if (!View(c)) return Results.Forbid();
+            await discovery.RefreshAsync(ct);
+            return Results.Ok(discovery.Targets);
+        });
+
+        app.MapGet("/api/engineering/diagnostics/diagnostic-level/targets", async (
+            HttpContext c,
+            IDiagnosticTargetCatalog discovery,
+            CancellationToken ct) =>
+        {
+            if (!View(c)) return Results.Forbid();
+            await discovery.RefreshAsync(ct);
             return Results.Ok(new
             {
                 targetTypes = new[]

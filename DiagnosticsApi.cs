@@ -76,6 +76,9 @@ internal static class DiagnosticsApi
                     target.Name,
                     target.SiteId,
                     target.BaseUrl,
+                    target.SupportsRemoteDiagnostics,
+                    target.AuthenticationScheme,
+                    target.SecretName,
                     target.SupportedLevels
                 }).ToArray()
             });

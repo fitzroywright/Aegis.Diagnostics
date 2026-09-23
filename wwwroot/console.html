@@ -41,9 +41,9 @@
       <div class="diagnostic-level-field"><label for="diagnosticTarget">Target</label><select id="diagnosticTarget"><option value="control-plane">Entire Control Plane</option></select></div>
       <button id="explainTarget" class="diagnostic-level-explain" type="button">Explain State</button>
     </section>
-    <section id="diagnostic-levelExplain" class="diagnostic-level-explain-panel"></section>
+    <section id="diagnosticLevelExplain" class="diagnostic-level-explain-panel"></section>
     <section class="levels"><button class="level" data-level="5"><b>LEVEL 5</b>ROUTINE<small>State consistency and freshness</small></button><button class="level" data-level="4"><b>LEVEL 4</b>INTEGRATION<small>Cross-service validation</small></button><button class="level" data-level="3"><b>LEVEL 3</b>FUNCTIONAL<small>Functional workflow exercise</small></button><button class="level" data-level="2"><b>LEVEL 2</b>FAILURE / RECOVERY<small>Controlled disruptive validation</small></button><button class="level" data-level="1"><b>LEVEL 1</b>EXHAUSTIVE<small>Deep certification</small></button></section>
-    <div class="sectiontitle">Diagnostic Catalogue</div><section id="diagnostic-levelCatalogue" class="runs"><div class="run muted">Loading test catalogue…</div></section>
+    <div class="sectiontitle">Diagnostic Catalogue</div><section id="diagnosticLevelCatalogue" class="runs"><div class="run muted">Loading test catalogue…</div></section>
     <section class="reason-panel"><label for="reason">Engineering reason / incident context</label><textarea id="reason" placeholder="Required for Levels 2 and 1"></textarea></section>
     <section class="engineer-notes panel">
       <div class="sectiontitle">Engineer&#39;s Notes</div>
@@ -89,8 +89,8 @@
 
 <script src="/session.js"></script>
 <script>
-const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason'),v2evidence=document.getElementById('v2evidence'),targetType=document.getElementById('targetType'),diagnosticTarget=document.getElementById('diagnosticTarget'),diagnostic-levelExplain=document.getElementById('diagnostic-levelExplain'),diagnostic-levelCatalogue=document.getElementById('diagnostic-levelCatalogue');
-let diagnostic-levelTargets={controlPlane:[],applications:[]};
+const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason'),v2evidence=document.getElementById('v2evidence'),targetType=document.getElementById('targetType'),diagnosticTarget=document.getElementById('diagnosticTarget'),diagnosticLevelExplain=document.getElementById('diagnosticLevelExplain'),diagnosticLevelCatalogue=document.getElementById('diagnosticLevelCatalogue');
+let diagnosticLevelTargets={controlPlane:[],applications:[]};
 let engineerRecorder=null,engineerChunks=[],engineerStream=null,pendingAudioBlob=null,pendingAudioName=null;
 async function toggleEngineerRecording(){
  const button=document.getElementById('engineerRecord'),state=document.getElementById('engineerRecordState');
@@ -181,24 +181,24 @@ async function loadCatalogue(){
   const r=await fetch(api+'/diagnostic-level/catalogue',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
   const d=await r.json(),tests=d.tests||[],summary=d.summary||[];
   const components=[...new Set(summary.map(x=>x.component))];
-  diagnostic-levelCatalogue.innerHTML='<article class="run"><div class="runmeta"><b>'+tests.length+' TESTS</b><br><small>Stable DiagnosticLevel IDs</small></div><div><b>Common.* catalogue</b><div class="muted">Requested levels are cumulative: L5 only; L4 adds L4; L3 adds L3; L2 adds L2; L1 adds L1.</div></div><div class="status-Passed"><b>CATALOGUED</b></div></article>'+
+  diagnosticLevelCatalogue.innerHTML='<article class="run"><div class="runmeta"><b>'+tests.length+' TESTS</b><br><small>Stable DiagnosticLevel IDs</small></div><div><b>Common.* catalogue</b><div class="muted">Requested levels are cumulative: L5 only; L4 adds L4; L3 adds L3; L2 adds L2; L1 adds L1.</div></div><div class="status-Passed"><b>CATALOGUED</b></div></article>'+
    components.map(component=>{
     const rows=summary.filter(x=>x.component===component),count=rows.reduce((a,x)=>a+x.count,0);
     const levels=[5,4,3,2,1].map(level=>'L'+level+': '+((rows.find(x=>x.level===level)||{}).count||0)).join(' · ');
     return '<article class="run"><div class="runmeta"><b>'+esc(component)+'</b><br><small>'+count+' tests</small></div><div><b>'+esc(levels)+'</b><div class="muted">Level 5/4 tests are non-destructive; deeper Common tests use isolated temporary/in-memory certification scenarios unless explicitly documented otherwise.</div></div><div class="status-Passed"><b>'+count+'</b></div></article>';
    }).join('');
- }catch(e){diagnostic-levelCatalogue.innerHTML='<div class="notice">Diagnostic catalogue unavailable: '+esc(e.message)+'</div>';}
+ }catch(e){diagnosticLevelCatalogue.innerHTML='<div class="notice">Diagnostic catalogue unavailable: '+esc(e.message)+'</div>';}
 }
 async function loadDiagnosticLevelTargets(){
  const r=await fetch(api+'/diagnostic-level/targets',{cache:'no-store'});if(!r.ok)throw new Error('Target inventory HTTP '+r.status);
- diagnostic-levelTargets=await r.json();renderTargetOptions();
+ diagnosticLevelTargets=await r.json();renderTargetOptions();
 }
 function renderTargetOptions(){
  const type=Number(targetType.value);let options=[];
  if(type===1)options=[{value:'control-plane',label:'Entire Control Plane'}];
- else if(type===2)options=(diagnostic-levelTargets.controlPlane||[]).filter(x=>x.targetId!=='control-plane').map(x=>({value:x.targetId,label:x.label}));
- else if(type===4)options=(diagnostic-levelTargets.commonComponents||[]).map(x=>({value:x.targetId,label:x.label}));
- else options=(diagnostic-levelTargets.applications||[]).map(x=>({value:(x.applicationId||'')+'|'+(x.instanceId||''),label:(x.name||x.applicationId)+' / '+(x.instanceId||'Default')}));
+ else if(type===2)options=(diagnosticLevelTargets.controlPlane||[]).filter(x=>x.targetId!=='control-plane').map(x=>({value:x.targetId,label:x.label}));
+ else if(type===4)options=(diagnosticLevelTargets.commonComponents||[]).map(x=>({value:x.targetId,label:x.label}));
+ else options=(diagnosticLevelTargets.applications||[]).map(x=>({value:(x.applicationId||'')+'|'+(x.instanceId||''),label:(x.name||x.applicationId)+' / '+(x.instanceId||'Default')}));
  diagnosticTarget.innerHTML=options.map(x=>'<option value="'+esc(x.value)+'">'+esc(x.label)+'</option>').join('')||'<option value="">No targets available</option>';
  document.getElementById('explainTarget').disabled=type!==3||!diagnosticTarget.value;
 }
@@ -215,11 +215,11 @@ async function explainSelectedTarget(){
  if(Number(targetType.value)!==3)return;
  const [applicationId,instanceId]=diagnosticTarget.value.split('|');
  if(!applicationId)return;
- diagnostic-levelExplain.classList.add('visible');diagnostic-levelExplain.innerHTML='<div class="muted">Loading state evidence…</div>';
+ diagnosticLevelExplain.classList.add('visible');diagnosticLevelExplain.innerHTML='<div class="muted">Loading state evidence…</div>';
  const r=await fetch(api+'/explain?applicationId='+encodeURIComponent(applicationId)+'&instanceId='+encodeURIComponent(instanceId||''),{cache:'no-store'});
- if(!r.ok){diagnostic-levelExplain.innerHTML='<div class="notice">State explanation unavailable (HTTP '+r.status+').</div>';return;}
+ if(!r.ok){diagnosticLevelExplain.innerHTML='<div class="notice">State explanation unavailable (HTTP '+r.status+').</div>';return;}
  const x=await r.json(),codes=(x.codes||[]).join(', ')||'NONE';
- diagnostic-levelExplain.innerHTML='<div class="sectiontitle">Application State Explain</div><div class="diagnostic-level-evidence">'+
+ diagnosticLevelExplain.innerHTML='<div class="sectiontitle">Application State Explain</div><div class="diagnostic-level-evidence">'+
   [['Result',x.result],['Registration',x.registrationState],['Effective State',x.effectiveState],['Displayed State',x.displayedState||'—'],['Last Auth UTC',x.lastAuthenticatedAtUtc||'—'],['Auth Age',x.authenticationAgeSeconds==null?'—':Math.round(x.authenticationAgeSeconds)+' sec'],['Last Telemetry UTC',x.lastTelemetryAtUtc||'—'],['Telemetry Age',x.telemetryAgeSeconds==null?'—':Math.round(x.telemetryAgeSeconds)+' sec'],['Stale After',x.staleAfterSeconds+' sec'],['Registration Fresh',x.registrationFresh],['Telemetry Fresh',x.telemetryFresh],['Codes',codes]].map(p=>'<div><small>'+esc(p[0])+'</small><b>'+esc(p[1])+'</b></div>').join('')+
   '</div><div class="muted" style="margin-top:8px">'+esc(x.reason||'')+'</div>';
 }
@@ -301,10 +301,14 @@ async function run(level){
  if(level<=2&&!reason.value.trim()){alert('LEVELS 2 AND 1 REQUIRE AN ENGINEERING REASON.');return;}
  if(level<=2&&!confirm('LEVEL '+level+' MAY EXECUTE DISRUPTIVE FAILURE/RECOVERY DIAGNOSTICS AGAINST ISOLATED DIAGNOSTIC TARGETS. CONTINUE?'))return;
  const payload=selectedTargetRequest(level);payload.reason=reason.value.trim()||null;payload.acknowledgeDisruption=level<=2;
- const r=await fetch(api+'/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ const remote=Number(targetType.value)===3;
+ const endpoint=remote?api+'/diagnostic-level/remote-run':api+'/run';
+ const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  if(r.status===401){location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);return;}
  if(r.status===403){alert('YOUR ACCOUNT DOES NOT HAVE PERMISSION FOR THIS DIAGNOSTIC LEVEL.');return;}
- if(!r.ok){alert(await r.text());return;}await load();
+ if(!r.ok){alert(await r.text());return;}
+ if(remote){await Promise.all([loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);return;}
+ await load();
 }
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>run(Number(b.dataset.level)));
 (async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([loadDiagnosticLevelTargets(),loadCatalogue(),load(),loadV2(),loadEngineerNotes(),loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);}catch{location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);}})();

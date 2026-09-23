@@ -24,18 +24,29 @@ public sealed class RemoteDiagnosticCatalog
         this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
-    public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(EngineeringDiagnosticLevel requestedLevel, string? reason)
+    public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(
+        EngineeringDiagnosticLevel requestedLevel,
+        string? reason,
+        DiagnosticTarget? diagnosticTarget = null)
     {
-        List<EngineeringDiagnosticCheckDefinition> checks =
-        [
-            new EngineeringDiagnosticCheckDefinition(
+        DiagnosticTarget targetSelection = diagnosticTarget ?? DiagnosticTarget.EntireControlPlane();
+        var checks = new List<EngineeringDiagnosticCheckDefinition>();
+
+        bool includeSelf =
+            targetSelection.Type == DiagnosticTargetType.ControlPlane ||
+            (targetSelection.Type == DiagnosticTargetType.ControlPlaneComponent &&
+             string.Equals(targetSelection.TargetId, ControlPlaneDiagnosticTargets.Diagnostics, StringComparison.OrdinalIgnoreCase));
+
+        if (includeSelf)
+        {
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
                 "aegis-diagnostics-self",
                 "Aegis.Diagnostics self health",
                 EngineeringDiagnosticLevel.Level5Scan,
-                ExecuteSelfHealthAsync)
-        ];
+                ExecuteSelfHealthAsync));
+        }
 
-        foreach (DiagnosticTargetOptions target in discovery.Targets)
+        foreach (DiagnosticTargetOptions target in SelectTargets(targetSelection))
         {
             string identity = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
             string id = $"{identity}-level-{(int)requestedLevel}".ToLowerInvariant().Replace('.', '-');
@@ -65,6 +76,34 @@ public sealed class RemoteDiagnosticCatalog
         }
         return checks;
     }
+
+    private IEnumerable<DiagnosticTargetOptions> SelectTargets(DiagnosticTarget selection)
+    {
+        IEnumerable<DiagnosticTargetOptions> targets = discovery.Targets;
+
+        return selection.Type switch
+        {
+            DiagnosticTargetType.ControlPlane => targets.Where(IsControlPlaneTarget),
+            DiagnosticTargetType.ControlPlaneComponent => selection.TargetId.ToLowerInvariant() switch
+            {
+                ControlPlaneDiagnosticTargets.Operations => targets.Where(x => string.Equals(x.ApplicationId, "Aegis.Operations", StringComparison.OrdinalIgnoreCase)),
+                ControlPlaneDiagnosticTargets.Configuration => targets.Where(x => string.Equals(x.ApplicationId, "Aegis.Configuration", StringComparison.OrdinalIgnoreCase)),
+                ControlPlaneDiagnosticTargets.Registration => targets.Where(x => string.Equals(x.ApplicationId, "Aegis.Configuration", StringComparison.OrdinalIgnoreCase)),
+                ControlPlaneDiagnosticTargets.Diagnostics => Enumerable.Empty<DiagnosticTargetOptions>(),
+                _ => Enumerable.Empty<DiagnosticTargetOptions>()
+            },
+            DiagnosticTargetType.RegisteredApplication => targets.Where(x =>
+                string.Equals(x.ApplicationId, selection.ApplicationId, StringComparison.OrdinalIgnoreCase) &&
+                (string.IsNullOrWhiteSpace(selection.InstanceId) ||
+                 string.Equals(x.InstanceId, selection.InstanceId, StringComparison.OrdinalIgnoreCase))),
+            _ => Enumerable.Empty<DiagnosticTargetOptions>()
+        };
+    }
+
+    private static bool IsControlPlaneTarget(DiagnosticTargetOptions target) =>
+        target.ApplicationId is not null &&
+        (target.ApplicationId.Equals("Aegis.Operations", StringComparison.OrdinalIgnoreCase) ||
+         target.ApplicationId.Equals("Aegis.Configuration", StringComparison.OrdinalIgnoreCase));
 
     public object GetCapabilities() => new
     {

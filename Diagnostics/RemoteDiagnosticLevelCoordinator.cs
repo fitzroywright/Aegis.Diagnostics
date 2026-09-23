@@ -18,6 +18,7 @@ public sealed class RemoteDiagnosticLevelCoordinator(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     DiagnosticLevelNonceCache nonceCache,
+    IDiagnosticLevelRunStore runStore,
     ILogger<RemoteDiagnosticLevelCoordinator> logger)
 {
     private readonly ConcurrentDictionary<Guid, PendingRemoteRun> pending = new();
@@ -114,8 +115,32 @@ public sealed class RemoteDiagnosticLevelCoordinator(
                 level,
                 accepted.AcceptedAtUtc,
                 accepted.AcceptedAtUtc,
-                DiagnosticLevelExecutionState.Accepted,
+                DiagnosticLevelExecutionState.Running,
                 target.SecretName);
+
+            var placeholder = new DiagnosticLevelRunRecord(
+                accepted.RunId,
+                accepted.RequestId,
+                accepted.CorrelationId,
+                accepted.Application,
+                accepted.Component,
+                baseUri.Host,
+                level,
+                DiagnosticLevelExecutionState.Running,
+                DiagnosticLevelDeliveryState.Accepted,
+                requestedBy,
+                request.IssuedAtUtc,
+                accepted.AcceptedAtUtc,
+                accepted.AcceptedAtUtc,
+                null,
+                new DiagnosticLevelComponentVersion(
+                    accepted.Application,
+                    accepted.Component,
+                    "Unknown",
+                    CatalogVersion: "Unknown"),
+                [],
+                LastProgressAtUtc: accepted.AcceptedAtUtc);
+            await runStore.SaveAsync(placeholder, cancellationToken).ConfigureAwait(false);
 
             return new(true, accepted, DiagnosticLevelDeliveryState.Accepted);
         }
@@ -191,13 +216,40 @@ public sealed class RemoteDiagnosticLevelCoordinator(
         return (true, duplicate, null);
     }
 
-    public void MarkUnknownAfter(TimeSpan staleAfter)
+    public async Task MarkUnknownAfterAsync(
+        TimeSpan staleAfter,
+        CancellationToken cancellationToken = default)
     {
-        DateTimeOffset cutoff = DateTimeOffset.UtcNow - staleAfter;
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset cutoff = now - staleAfter;
         foreach ((Guid key, PendingRemoteRun value) in pending)
         {
-            if (value.LastUpdatedAtUtc >= cutoff) continue;
-            pending[key] = value with { State = DiagnosticLevelExecutionState.Unknown, LastUpdatedAtUtc = DateTimeOffset.UtcNow };
+            if (value.State == DiagnosticLevelExecutionState.Unknown ||
+                value.LastUpdatedAtUtc >= cutoff)
+                continue;
+
+            PendingRemoteRun unknown = value with
+            {
+                State = DiagnosticLevelExecutionState.Unknown,
+                LastUpdatedAtUtc = now
+            };
+            pending[key] = unknown;
+
+            DiagnosticLevelRunRecord? stored =
+                await runStore.GetAsync(value.RunId, cancellationToken).ConfigureAwait(false);
+            if (stored is not null &&
+                stored.ExecutionState is DiagnosticLevelExecutionState.Running or
+                    DiagnosticLevelExecutionState.Accepted)
+            {
+                await runStore.SaveAsync(
+                    stored with
+                    {
+                        ExecutionState = DiagnosticLevelExecutionState.Unknown,
+                        Failure = "Remote diagnostic completion is stale; final target state is unknown.",
+                        LastProgressAtUtc = value.LastUpdatedAtUtc
+                    },
+                    cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 

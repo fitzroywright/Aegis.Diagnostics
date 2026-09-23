@@ -34,6 +34,7 @@ builder.Services.AddSingleton<DiagnosticContractV2StateStore>();
 builder.Services.AddHostedService<ApplicationHealthMonitor>();
 builder.Services.AddDiagnosticsMessaging(builder.Configuration);
 builder.Services.AddSingleton<CommonComponentDiagnosticCatalog>();
+builder.Services.AddSingleton<CommonIsolatedCertificationCatalog>();
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
 builder.Services.AddSingleton<LevelXStateExplainService>();
 builder.Services.AddSingleton<ILevelXStateExplainService>(services => services.GetRequiredService<LevelXStateExplainService>());

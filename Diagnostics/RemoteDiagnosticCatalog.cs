@@ -13,6 +13,7 @@ public sealed class RemoteDiagnosticCatalog
     private readonly IConfiguration configuration;
     private readonly ILevelXStateExplainService stateExplain;
     private readonly CommonComponentDiagnosticCatalog commonComponents;
+    private readonly CommonIsolatedCertificationCatalog isolatedCertifications;
 
     public RemoteDiagnosticCatalog(
         IHttpClientFactory httpClientFactory,
@@ -20,7 +21,8 @@ public sealed class RemoteDiagnosticCatalog
         IDiagnosticTargetCatalog discovery,
         IConfiguration configuration,
         ILevelXStateExplainService stateExplain,
-        CommonComponentDiagnosticCatalog commonComponents)
+        CommonComponentDiagnosticCatalog commonComponents,
+        CommonIsolatedCertificationCatalog isolatedCertifications)
     {
         this.httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         this.options = options ?? throw new ArgumentNullException(nameof(options));
@@ -28,6 +30,7 @@ public sealed class RemoteDiagnosticCatalog
         this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         this.stateExplain = stateExplain ?? throw new ArgumentNullException(nameof(stateExplain));
         this.commonComponents = commonComponents ?? throw new ArgumentNullException(nameof(commonComponents));
+        this.isolatedCertifications = isolatedCertifications ?? throw new ArgumentNullException(nameof(isolatedCertifications));
     }
 
     public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(
@@ -65,6 +68,7 @@ public sealed class RemoteDiagnosticCatalog
         if (targetSelection.Type is DiagnosticTargetType.ControlPlane or DiagnosticTargetType.CommonComponent)
         {
             checks.AddRange(commonComponents.Build(targetSelection));
+            checks.AddRange(isolatedCertifications.Build(targetSelection));
         }
 
         IEnumerable<DiagnosticTargetOptions> selectedTargets =

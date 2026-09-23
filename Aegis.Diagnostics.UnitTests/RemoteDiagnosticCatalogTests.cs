@@ -2,6 +2,8 @@ namespace Aegis.Diagnostics.UnitTests;
 
 using Common.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Net.Http.Json;
 using Xunit;
@@ -132,12 +134,21 @@ public sealed class RemoteDiagnosticCatalogTests
             ["CommonSecrets:ProviderOrder:0"] = "LocalConfiguration",
             ["CommonSecrets:Providers:LocalConfiguration:Type"] = "Configuration"
         }).Build();
+        var targetCatalog = new TestTargetCatalog(targets);
+        var stateExplain = new TestStateExplainService();
+        var commonComponents = new CommonComponentDiagnosticCatalog(
+            new ServiceCollection().BuildServiceProvider(),
+            configuration,
+            targetCatalog,
+            stateExplain,
+            NullLogger<CommonComponentDiagnosticCatalog>.Instance);
         return new RemoteDiagnosticCatalog(
             new TestHttpClientFactory(handler),
             new DiagnosticsOptions { RequireApiKey = false },
-            new TestTargetCatalog(targets),
+            targetCatalog,
             configuration,
-            new TestStateExplainService());
+            stateExplain,
+            commonComponents);
     }
 
     private static RemoteDiagnosticCatalog CreateCatalog(HttpMessageHandler handler, bool requireCredential, bool includeCredential = false)
@@ -168,7 +179,15 @@ public sealed class RemoteDiagnosticCatalogTests
             requireCredential ? secretName : string.Empty,
             [1, 2, 3, 4, 5],
             DateTimeOffset.UtcNow);
-        return new RemoteDiagnosticCatalog(new TestHttpClientFactory(handler), options, new TestTargetCatalog([target]), configuration, new TestStateExplainService());
+        var targetCatalog = new TestTargetCatalog([target]);
+        var stateExplain = new TestStateExplainService();
+        var commonComponents = new CommonComponentDiagnosticCatalog(
+            new ServiceCollection().BuildServiceProvider(),
+            configuration,
+            targetCatalog,
+            stateExplain,
+            NullLogger<CommonComponentDiagnosticCatalog>.Instance);
+        return new RemoteDiagnosticCatalog(new TestHttpClientFactory(handler), options, targetCatalog, configuration, stateExplain, commonComponents);
     }
 
     private static EngineeringDiagnosticRun CreateRemoteRun(EngineeringDiagnosticStatus status)

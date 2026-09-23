@@ -203,6 +203,7 @@ public sealed class RemoteDiagnosticCatalogTests
         public DateTimeOffset? LastSuccessfulRefreshUtc { get; } = DateTimeOffset.UtcNow;
         public string? LastError => null;
         public bool IsStale => false;
+        public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class TestStateExplainService : IDiagnosticLevelStateExplainService

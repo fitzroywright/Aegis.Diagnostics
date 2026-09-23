@@ -92,6 +92,7 @@
 <script>
 const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason'),v2evidence=document.getElementById('v2evidence'),targetType=document.getElementById('targetType'),diagnosticTarget=document.getElementById('diagnosticTarget'),diagnosticLevelExplain=document.getElementById('diagnosticLevelExplain'),diagnosticLevelCatalogue=document.getElementById('diagnosticLevelCatalogue'),diagnosticLevelRunStatus=document.getElementById('diagnosticLevelRunStatus');
 let diagnosticLevelTargets={controlPlane:[],applications:[]};
+let activeRemoteDiagnosticRunId=localStorage.getItem('aegis.diagnostics.activeRemoteRunId')||'';
 let engineerRecorder=null,engineerChunks=[],engineerStream=null,pendingAudioBlob=null,pendingAudioName=null;
 async function toggleEngineerRecording(){
  const button=document.getElementById('engineerRecord'),state=document.getElementById('engineerRecordState');
@@ -281,8 +282,32 @@ async function loadDiagnosticLevelLive(){
   const r=await fetch(api+'/diagnostic-level/live',{cache:'no-store'});
   if(!r.ok)throw new Error('HTTP '+r.status);
   const x=await r.json(),list=x.runs||[];
-  if(!list.length){el.innerHTML='<div class="diagnostic-level-live-card"><b class="live-state">IDLE</b><small>No remote DiagnosticLevel diagnostic is currently running.</small></div>';return;}
-  el.innerHTML=list.map(v=>'<article class="diagnostic-level-live-card"><b>'+esc(v.applicationId||'Unknown')+' · '+esc(v.instanceId||'Default')+'</b><span class="live-state">'+esc(hxStateName(v.state))+' · LEVEL '+esc(v.level)+'</span><small>Run '+esc(v.runId)+'</small><small>Started '+esc(localDateTime(v.acceptedAtUtc))+' · Elapsed '+esc(hxElapsed(v.acceptedAtUtc))+'</small><small>Last progress '+esc(localDateTime(v.lastUpdatedAtUtc))+'</small></article>').join('');
+  let cards=list.map(v=>'<article class="diagnostic-level-live-card"><b>'+esc(v.applicationId||'Unknown')+' · '+esc(v.instanceId||'Default')+'</b><span class="live-state">'+esc(hxStateName(v.state))+' · LEVEL '+esc(v.level)+'</span><small>Run '+esc(v.runId)+'</small><small>Started '+esc(localDateTime(v.acceptedAtUtc))+' · Elapsed '+esc(hxElapsed(v.acceptedAtUtc))+'</small><small>Last progress '+esc(localDateTime(v.lastUpdatedAtUtc))+'</small></article>');
+
+  if(activeRemoteDiagnosticRunId){
+   try{
+    const h=await fetch(api+'/diagnostic-level/history/'+encodeURIComponent(activeRemoteDiagnosticRunId),{cache:'no-store'});
+    if(h.ok){
+     const run=await h.json(),state=hxStateName(run.executionState);
+     const finished=['Completed','Cancelled','Interrupted','NotStarted','Unknown'].includes(state);
+     const startedAt=run.startedAtUtc||run.acceptedAtUtc||run.requestedAtUtc;
+     const completedAt=run.completedAtUtc||null;
+     const tests=run.tests||[];
+     const failed=tests.filter(t=>hxTestStatusName(t.status)==='Failed').length;
+     const warnings=tests.filter(t=>['Warning','InterventionRequired'].includes(hxTestStatusName(t.status))).length;
+     const outcome=failed?failed+' failed':warnings?warnings+' warning':'all tests passed';
+     cards=cards.filter(html=>!html.includes(esc(activeRemoteDiagnosticRunId)));
+     cards.unshift('<article class="diagnostic-level-live-card"><b>'+esc(run.application||'Unknown')+' · '+esc(run.component||'Unknown')+'</b><span class="live-state">'+esc(state)+' · LEVEL '+esc(run.level)+'</span><small>Run '+esc(run.runId)+'</small><small>Started '+esc(localDateTime(startedAt))+(finished?' · Stopped '+esc(localDateTime(completedAt||run.lastProgressAtUtc)):' · Elapsed '+esc(hxElapsed(startedAt)))+'</small>'+(run.currentTestId?'<small>Current test '+esc(run.currentTestId)+'</small>':'')+(finished?'<small>Result: '+esc(outcome)+'</small>':'<small>Last progress '+esc(localDateTime(run.lastProgressAtUtc||startedAt))+'</small>')+'</article>');
+     if(finished){
+      localStorage.removeItem('aegis.diagnostics.activeRemoteRunId');
+      activeRemoteDiagnosticRunId='';
+     }
+    }
+   }catch{}
+  }
+
+  if(!cards.length)cards.push('<div class="diagnostic-level-live-card"><b class="live-state">IDLE</b><small>No remote DiagnosticLevel diagnostic is currently running.</small></div>');
+  el.innerHTML=cards.join('');
  }catch(e){el.innerHTML='<div class="notice">Live DiagnosticLevel state unavailable · '+esc(e.message)+'</div>';}
 }
 async function loadDiagnosticLevelHistory(){
@@ -365,6 +390,10 @@ async function run(level){
  }
  if(remote){
   const accepted=await r.json().catch(()=>null);
+  if(accepted?.runId){
+   activeRemoteDiagnosticRunId=accepted.runId;
+   localStorage.setItem('aegis.diagnostics.activeRemoteRunId',accepted.runId);
+  }
   showDiagnosticLevelRunStatus('success','DiagnosticLevel request accepted','Remote Level '+level+' run was accepted.'+(accepted?.application?' Target: '+accepted.application+'.':''),accepted?.runId?'Run '+accepted.runId:'HTTP '+r.status);
   window.aegisAudio?.play('success');
   await Promise.all([loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);
@@ -375,6 +404,6 @@ async function run(level){
 }
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>run(Number(b.dataset.level)));
 (async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([loadDiagnosticLevelTargets(),loadCatalogue(),load(),loadV2(),loadEngineerNotes(),loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);}catch{location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);}})();
-setInterval(()=>{load();loadV2();loadEngineerNotes();loadDiagnosticLevelLive();},5000);
+setInterval(()=>{load();loadV2();loadEngineerNotes();loadDiagnosticLevelLive();loadDiagnosticLevelHistory();},3000);
 </script>
 </body></html>

@@ -12,19 +12,22 @@ public sealed class RemoteDiagnosticCatalog
     private readonly IDiagnosticTargetCatalog discovery;
     private readonly IConfiguration configuration;
     private readonly ILevelXStateExplainService stateExplain;
+    private readonly CommonComponentDiagnosticCatalog commonComponents;
 
     public RemoteDiagnosticCatalog(
         IHttpClientFactory httpClientFactory,
         DiagnosticsOptions options,
         IDiagnosticTargetCatalog discovery,
         IConfiguration configuration,
-        ILevelXStateExplainService stateExplain)
+        ILevelXStateExplainService stateExplain,
+        CommonComponentDiagnosticCatalog commonComponents)
     {
         this.httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         this.discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
         this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         this.stateExplain = stateExplain ?? throw new ArgumentNullException(nameof(stateExplain));
+        this.commonComponents = commonComponents ?? throw new ArgumentNullException(nameof(commonComponents));
     }
 
     public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(
@@ -57,6 +60,11 @@ public sealed class RemoteDiagnosticCatalog
                 "Control Plane cross-service agreement",
                 EngineeringDiagnosticLevel.Level4Analysis,
                 ExecuteControlPlaneIntegrationAsync));
+        }
+
+        if (targetSelection.Type is DiagnosticTargetType.ControlPlane or DiagnosticTargetType.CommonComponent)
+        {
+            checks.AddRange(commonComponents.Build(targetSelection));
         }
 
         IEnumerable<DiagnosticTargetOptions> selectedTargets =
@@ -118,6 +126,7 @@ public sealed class RemoteDiagnosticCatalog
                 ControlPlaneDiagnosticTargets.Diagnostics => Enumerable.Empty<DiagnosticTargetOptions>(),
                 _ => Enumerable.Empty<DiagnosticTargetOptions>()
             },
+            DiagnosticTargetType.CommonComponent => Enumerable.Empty<DiagnosticTargetOptions>(),
             DiagnosticTargetType.RegisteredApplication => targets.Where(x =>
                 string.Equals(x.ApplicationId, selection.ApplicationId, StringComparison.OrdinalIgnoreCase) &&
                 (string.IsNullOrWhiteSpace(selection.InstanceId) ||

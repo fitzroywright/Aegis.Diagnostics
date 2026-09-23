@@ -12,6 +12,8 @@
 .level[data-level="2"]{--level-accent:#ff8a3d;border-top-color:var(--level-accent)}.level[data-level="2"] b{color:#ff8a3d}
 .level[data-level="1"]{--level-accent:#ff3500;border-top-color:var(--level-accent)}.level[data-level="1"] b{color:#ff3500}
 .level{transition:transform .12s ease,box-shadow .18s ease,filter .18s ease}
+.level:disabled{cursor:not-allowed;opacity:.52;filter:saturate(.45)}
+.level.level-running:disabled{opacity:1;filter:none;cursor:wait}
 .level.level-pressed{transform:translateY(2px) scale(.985);filter:brightness(1.15)}
 .level.level-running{position:relative;box-shadow:0 0 0 2px var(--level-accent),0 0 14px var(--level-accent),0 0 28px color-mix(in srgb,var(--level-accent) 55%,transparent);animation:diagnostic-level-halo 1.35s ease-in-out infinite}
 .level.level-running::after{content:"RUNNING";position:absolute;right:9px;top:7px;font-size:9px;font-weight:900;letter-spacing:.08em;color:var(--level-accent)}
@@ -137,9 +139,17 @@ function pressDiagnosticLevelButton(level){
  button.classList.add('level-pressed');
  setTimeout(()=>button.classList.remove('level-pressed'),180);
 }
+function setDiagnosticLevelButtonsDisabled(disabled){
+ document.querySelectorAll('.level[data-level]').forEach(button=>{
+  button.disabled=disabled;
+  button.setAttribute('aria-disabled',disabled?'true':'false');
+ });
+}
 function setRunningDiagnosticLevel(level){
+ const running=Number(level)>0;
  document.querySelectorAll('.level[data-level]').forEach(button=>
-  button.classList.toggle('level-running',Number(button.dataset.level)===Number(level)&&Number(level)>0));
+  button.classList.toggle('level-running',Number(button.dataset.level)===Number(level)&&running));
+ setDiagnosticLevelButtonsDisabled(running);
 }
 function clearRunningDiagnosticLevel(){
  activeRemoteDiagnosticLevel=0;
@@ -449,6 +459,7 @@ async function readDiagnosticLevelError(response){
  return {message,detail};
 }
 async function run(level){
+ if(activeRemoteDiagnosticLevel>0)return;
  pressDiagnosticLevelButton(level);
  clearDiagnosticLevelRunStatus();
  if(level<=2&&!reason.value.trim()){showDiagnosticLevelRunStatus('error','DiagnosticLevel request not started','Levels 2 and 1 require an engineering reason.','Level '+level);window.aegisAudio?.play('warning');return;}

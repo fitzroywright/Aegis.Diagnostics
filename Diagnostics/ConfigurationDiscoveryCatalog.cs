@@ -101,21 +101,49 @@ public sealed class ConfigurationDiscoveryCatalog(
                 .GroupBy(contract => IdentityKey(contract.ApplicationId!, contract.InstanceId), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.OrderByDescending(x => x.LastRegisteredAtUtc).First(), StringComparer.OrdinalIgnoreCase);
 
-            RegisteredApplicationInventoryItem[] registered = await LoadRegisteredApplicationsAsync(
-                credential,
-                instanceId,
-                cancellationToken).ConfigureAwait(false);
+            RegisteredApplicationInventoryItem[] registered = [];
+            try
+            {
+                registered = await LoadRegisteredApplicationsAsync(
+                    credential,
+                    instanceId,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(
+                    exception,
+                    "Operations application inventory is unavailable; Configuration contracts remain authoritative for diagnostic capabilities.");
+            }
 
-            DiagnosticTargetOptions[] discovered = registered
-                .Where(item => !string.Equals(item.ApplicationId, options.ApplicationId, StringComparison.OrdinalIgnoreCase))
+            Dictionary<string, RegisteredApplicationInventoryItem> registeredByIdentity = registered
+                .Where(item => !string.IsNullOrWhiteSpace(item.ApplicationId))
                 .Where(item => string.Equals(item.RegistrationStatus, "Registered", StringComparison.OrdinalIgnoreCase))
-                .Select(item =>
+                .GroupBy(item => IdentityKey(item.ApplicationId, item.InstanceId), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.OrderByDescending(x => x.RegistrationObservedAtUtc).First(), StringComparer.OrdinalIgnoreCase);
+
+            DiagnosticTargetOptions[] discovered = contracts
+                .Where(contract => !string.IsNullOrWhiteSpace(contract.ApplicationId))
+                .Where(contract => !string.Equals(contract.ApplicationId, options.ApplicationId, StringComparison.OrdinalIgnoreCase))
+                .Select(contract =>
                 {
-                    contractsByIdentity.TryGetValue(IdentityKey(item.ApplicationId, item.InstanceId), out ConfigurationApplicationContract? contract);
-                    contract ??= contracts
-                        .Where(candidate => string.Equals(candidate.ApplicationId, item.ApplicationId, StringComparison.OrdinalIgnoreCase))
-                        .OrderByDescending(candidate => candidate.LastRegisteredAtUtc)
-                        .FirstOrDefault();
+                    registeredByIdentity.TryGetValue(
+                        IdentityKey(contract.ApplicationId!, contract.InstanceId),
+                        out RegisteredApplicationInventoryItem? item);
+
+                    item ??= new RegisteredApplicationInventoryItem(
+                        contract.ApplicationId!,
+                        contract.DisplayName,
+                        contract.InstanceId,
+                        "Registered",
+                        contract.LastRegisteredAtUtc,
+                        false,
+                        null);
+
                     return ToTarget(item, contract);
                 })
                 .OrderBy(target => target.Name, StringComparer.OrdinalIgnoreCase)

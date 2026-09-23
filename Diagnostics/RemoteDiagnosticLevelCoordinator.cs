@@ -283,13 +283,31 @@ public sealed class RemoteDiagnosticLevelCoordinator(
                 if (run is null)
                     continue;
 
-                pending[runId] = value with
+                PendingRemoteRun refreshed = value with
                 {
                     State = run.ExecutionState,
                     LastUpdatedAtUtc = run.LastProgressAtUtc ?? DateTimeOffset.UtcNow,
                     CurrentTestId = run.CurrentTestId,
                     CurrentTestName = run.CurrentTestName
                 };
+
+                bool terminal = run.ExecutionState is
+                    DiagnosticLevelExecutionState.Completed or
+                    DiagnosticLevelExecutionState.Cancelled or
+                    DiagnosticLevelExecutionState.Interrupted or
+                    DiagnosticLevelExecutionState.NotStarted or
+                    DiagnosticLevelExecutionState.Unknown;
+
+                if (terminal)
+                {
+                    pending.TryRemove(runId, out _);
+                    completed[runId] = refreshed;
+                    TrimCompleted();
+                }
+                else
+                {
+                    pending[runId] = refreshed;
+                }
 
                 DiagnosticLevelRunRecord? stored =
                     await runStore.GetAsync(runId, cancellationToken).ConfigureAwait(false);
@@ -304,7 +322,8 @@ public sealed class RemoteDiagnosticLevelCoordinator(
                             CurrentTestId = run.CurrentTestId,
                             CurrentTestName = run.CurrentTestName,
                             LastProgressAtUtc = run.LastProgressAtUtc,
-                            Tests = run.Tests
+                            Tests = run.Tests,
+                            Failure = run.Failure
                         },
                         cancellationToken).ConfigureAwait(false);
                 }

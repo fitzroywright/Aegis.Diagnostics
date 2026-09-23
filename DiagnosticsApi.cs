@@ -45,6 +45,60 @@ internal static class DiagnosticsApi
         app.MapGet("/api/engineering/diagnostics/targets", (HttpContext c, IDiagnosticTargetCatalog discovery) =>
             View(c) ? Results.Ok(discovery.Targets) : Results.Forbid());
 
+        app.MapGet("/api/engineering/diagnostics/levelx/targets", (HttpContext c, IDiagnosticTargetCatalog discovery) =>
+        {
+            if (!View(c)) return Results.Forbid();
+            return Results.Ok(new
+            {
+                targetTypes = new[]
+                {
+                    new { value = "ControlPlane", label = "Control Plane" },
+                    new { value = "ControlPlaneComponent", label = "Control Plane Component" },
+                    new { value = "RegisteredApplication", label = "Registered Application" }
+                },
+                controlPlane = new[]
+                {
+                    new { targetId = ControlPlaneDiagnosticTargets.EntireControlPlane, label = "Entire Control Plane" },
+                    new { targetId = ControlPlaneDiagnosticTargets.Operations, label = "Operations" },
+                    new { targetId = ControlPlaneDiagnosticTargets.Configuration, label = "Configuration" },
+                    new { targetId = ControlPlaneDiagnosticTargets.Diagnostics, label = "Diagnostics" },
+                    new { targetId = ControlPlaneDiagnosticTargets.Registration, label = "Registration" }
+                },
+                applications = discovery.Targets.Select(target => new
+                {
+                    target.ApplicationId,
+                    target.InstanceId,
+                    target.Name,
+                    target.SiteId,
+                    target.BaseUrl,
+                    target.SupportedLevels
+                }).ToArray()
+            });
+        });
+
+        app.MapGet("/api/engineering/diagnostics/explain", async (
+            string applicationId,
+            string? instanceId,
+            HttpContext c,
+            LevelXStateExplainService explain,
+            CancellationToken ct) =>
+        {
+            if (!View(c)) return Results.Forbid();
+            try
+            {
+                LevelXStateExplanation? result = await explain.ExplainAsync(applicationId, instanceId, ct);
+                return result is null ? Results.NotFound() : Results.Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
         app.MapGet("/api/engineering/diagnostics/status", (HttpContext c, ApplicationHealthStateStore health) =>
             View(c) ? Results.Ok(new { source = "Aegis.Diagnostics", observations = health.GetAll() }) : Results.Forbid());
 
@@ -88,6 +142,78 @@ internal static class DiagnosticsApi
             if (!Has(c, "Diagnostics.Run")) return Results.Forbid();
             store.Set(item);
             return Results.Accepted();
+        });
+
+        app.MapGet("/api/engineering/diagnostics/levelx/catalogue", (HttpContext c) =>
+        {
+            if (!View(c)) return Results.Forbid();
+            return Results.Ok(new[]
+            {
+                new
+                {
+                    level = 5,
+                    name = "Routine",
+                    status = "IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Target selection",
+                        "Control Plane/component/application targeting",
+                        "Health probing",
+                        "Registration/telemetry freshness explanation",
+                        "State derivation mismatch detection",
+                        "Run history and evidence"
+                    }
+                },
+                new
+                {
+                    level = 4,
+                    name = "Integration",
+                    status = "PARTIALLY IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Remote diagnostics orchestration",
+                        "Cross-application target filtering",
+                        "Control Plane component selection",
+                        "Existing integration diagnostics from registered applications"
+                    }
+                },
+                new
+                {
+                    level = 3,
+                    name = "Functional",
+                    status = "PARTIALLY IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Remote functional diagnostics where applications advertise support",
+                        "Target-aware orchestration",
+                        "Registration lifecycle automation framework not yet complete"
+                    }
+                },
+                new
+                {
+                    level = 2,
+                    name = "Failure / Recovery",
+                    status = "PARTIALLY IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Explicit disruption acknowledgement",
+                        "Engineering reason gate",
+                        "Isolated failure/recovery probe execution not yet complete"
+                    }
+                },
+                new
+                {
+                    level = 1,
+                    name = "Exhaustive",
+                    status = "PARTIALLY IMPLEMENTED",
+                    capabilities = new[]
+                    {
+                        "Explicit disruption acknowledgement",
+                        "Exhaustive-level orchestration contract",
+                        "14-test isolated Registration certification runner not yet complete"
+                    }
+                }
+            });
         });
 
         app.MapGet("/api/engineering/diagnostics/capabilities", (HttpContext c, RemoteDiagnosticCatalog catalog) => View(c) ? Results.Ok(catalog.GetCapabilities()) : Results.Forbid());

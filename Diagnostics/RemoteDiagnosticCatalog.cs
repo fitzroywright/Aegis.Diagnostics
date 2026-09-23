@@ -11,43 +11,80 @@ public sealed class RemoteDiagnosticCatalog
     private readonly DiagnosticsOptions options;
     private readonly IDiagnosticTargetCatalog discovery;
     private readonly IConfiguration configuration;
+    private readonly ILevelXStateExplainService stateExplain;
 
     public RemoteDiagnosticCatalog(
         IHttpClientFactory httpClientFactory,
         DiagnosticsOptions options,
         IDiagnosticTargetCatalog discovery,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILevelXStateExplainService stateExplain)
     {
         this.httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         this.discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
         this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        this.stateExplain = stateExplain ?? throw new ArgumentNullException(nameof(stateExplain));
     }
 
-    public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(EngineeringDiagnosticLevel requestedLevel, string? reason)
+    public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(
+        EngineeringDiagnosticLevel requestedLevel,
+        string? reason,
+        DiagnosticTarget? diagnosticTarget = null)
     {
-        List<EngineeringDiagnosticCheckDefinition> checks =
-        [
-            new EngineeringDiagnosticCheckDefinition(
+        DiagnosticTarget targetSelection = diagnosticTarget ?? DiagnosticTarget.EntireControlPlane();
+        var checks = new List<EngineeringDiagnosticCheckDefinition>();
+
+        bool includeSelf =
+            diagnosticTarget is null ||
+            targetSelection.Type == DiagnosticTargetType.ControlPlane ||
+            (targetSelection.Type == DiagnosticTargetType.ControlPlaneComponent &&
+             string.Equals(targetSelection.TargetId, ControlPlaneDiagnosticTargets.Diagnostics, StringComparison.OrdinalIgnoreCase));
+
+        if (includeSelf)
+        {
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
                 "aegis-diagnostics-self",
                 "Aegis.Diagnostics self health",
                 EngineeringDiagnosticLevel.Level5Scan,
-                ExecuteSelfHealthAsync)
-        ];
+                ExecuteSelfHealthAsync));
+        }
 
-        foreach (DiagnosticTargetOptions target in discovery.Targets)
+        if (targetSelection.Type == DiagnosticTargetType.ControlPlane)
+        {
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
+                "control-plane-integration",
+                "Control Plane cross-service agreement",
+                EngineeringDiagnosticLevel.Level4Analysis,
+                ExecuteControlPlaneIntegrationAsync));
+        }
+
+        IEnumerable<DiagnosticTargetOptions> selectedTargets =
+            diagnosticTarget is null ? discovery.Targets : SelectTargets(targetSelection);
+
+        foreach (DiagnosticTargetOptions target in selectedTargets)
         {
             string identity = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
             string id = $"{identity}-level-{(int)requestedLevel}".ToLowerInvariant().Replace('.', '-');
             string displayName = $"{target.Name} — Level {(int)requestedLevel}";
+            string stateId = $"{identity}-state-consistency".ToLowerInvariant().Replace('.', '-');
+
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
+                stateId,
+                $"{target.Name} — State consistency",
+                EngineeringDiagnosticLevel.Level5Scan,
+                cancellationToken => ExecuteStateConsistencyAsync(stateId, target, cancellationToken)));
 
             if (!target.SupportsRemoteDiagnostics)
             {
-                checks.Add(new EngineeringDiagnosticCheckDefinition(
-                    id,
-                    displayName,
-                    requestedLevel,
-                    _ => Task.FromResult(NotExecuted(id, displayName, "Application does not advertise remote diagnostics capability.", target.ApplicationId))));
+                if (requestedLevel != EngineeringDiagnosticLevel.Level5Scan)
+                {
+                    checks.Add(new EngineeringDiagnosticCheckDefinition(
+                        id,
+                        displayName,
+                        requestedLevel,
+                        _ => Task.FromResult(NotExecuted(id, displayName, "Application does not advertise remote diagnostics capability.", target.ApplicationId))));
+                }
                 continue;
             }
 
@@ -65,6 +102,34 @@ public sealed class RemoteDiagnosticCatalog
         }
         return checks;
     }
+
+    private IEnumerable<DiagnosticTargetOptions> SelectTargets(DiagnosticTarget selection)
+    {
+        IEnumerable<DiagnosticTargetOptions> targets = discovery.Targets;
+
+        return selection.Type switch
+        {
+            DiagnosticTargetType.ControlPlane => targets.Where(IsControlPlaneTarget),
+            DiagnosticTargetType.ControlPlaneComponent => selection.TargetId.ToLowerInvariant() switch
+            {
+                ControlPlaneDiagnosticTargets.Operations => targets.Where(x => string.Equals(x.ApplicationId, "Aegis.Operations", StringComparison.OrdinalIgnoreCase)),
+                ControlPlaneDiagnosticTargets.Configuration => targets.Where(x => string.Equals(x.ApplicationId, "Aegis.Configuration", StringComparison.OrdinalIgnoreCase)),
+                ControlPlaneDiagnosticTargets.Registration => targets.Where(x => string.Equals(x.ApplicationId, "Aegis.Configuration", StringComparison.OrdinalIgnoreCase)),
+                ControlPlaneDiagnosticTargets.Diagnostics => Enumerable.Empty<DiagnosticTargetOptions>(),
+                _ => Enumerable.Empty<DiagnosticTargetOptions>()
+            },
+            DiagnosticTargetType.RegisteredApplication => targets.Where(x =>
+                string.Equals(x.ApplicationId, selection.ApplicationId, StringComparison.OrdinalIgnoreCase) &&
+                (string.IsNullOrWhiteSpace(selection.InstanceId) ||
+                 string.Equals(x.InstanceId, selection.InstanceId, StringComparison.OrdinalIgnoreCase))),
+            _ => Enumerable.Empty<DiagnosticTargetOptions>()
+        };
+    }
+
+    private static bool IsControlPlaneTarget(DiagnosticTargetOptions target) =>
+        target.ApplicationId is not null &&
+        (target.ApplicationId.Equals("Aegis.Operations", StringComparison.OrdinalIgnoreCase) ||
+         target.ApplicationId.Equals("Aegis.Configuration", StringComparison.OrdinalIgnoreCase));
 
     public object GetCapabilities() => new
     {
@@ -92,6 +157,172 @@ public sealed class RemoteDiagnosticCatalog
             target.ConfigurationRegisteredAtUtc
         }).ToArray()
     };
+
+    private async Task<EngineeringDiagnosticCheckResult> ExecuteControlPlaneIntegrationAsync(
+        CancellationToken cancellationToken)
+    {
+        List<string> failures = [];
+        List<string> warnings = [];
+        List<string> evidence = [];
+
+        if (discovery.LastSuccessfulRefreshUtc is null)
+            failures.Add(discovery.LastError ?? "Configuration discovery has never completed successfully.");
+        else
+        {
+            double ageSeconds = Math.Max(
+                0,
+                (DateTimeOffset.UtcNow - discovery.LastSuccessfulRefreshUtc.Value).TotalSeconds);
+            evidence.Add($"ConfigurationDiscoveryLastSuccessfulUtc={discovery.LastSuccessfulRefreshUtc:O}");
+            evidence.Add($"ConfigurationDiscoveryAgeSeconds={ageSeconds:0.###}");
+            if (discovery.IsStale)
+                warnings.Add("Configuration discovery is stale.");
+        }
+
+        string[] expectedControlPlaneApps = ["Aegis.Operations", "Aegis.Configuration"];
+        foreach (string applicationId in expectedControlPlaneApps)
+        {
+            DiagnosticTargetOptions? target = discovery.Targets.FirstOrDefault(x =>
+                string.Equals(x.ApplicationId, applicationId, StringComparison.OrdinalIgnoreCase));
+
+            if (target is null)
+            {
+                failures.Add($"{applicationId} is missing from the authoritative registered-application inventory.");
+                continue;
+            }
+
+            LevelXStateExplanation? explanation =
+                await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (explanation is null)
+            {
+                failures.Add($"{applicationId} is registered but Operations did not return merged state evidence.");
+                continue;
+            }
+
+            evidence.Add(
+                $"{applicationId}: Registration={explanation.RegistrationState}; Effective={explanation.EffectiveState}; " +
+                $"RegistrationFresh={explanation.RegistrationFresh}; TelemetryFresh={explanation.TelemetryFresh}; " +
+                $"AuthorityAvailable={explanation.AuthorityAvailable}; Codes={string.Join(",", explanation.Codes)}");
+
+            if (!explanation.AuthorityAvailable)
+                failures.Add($"{applicationId} cannot confirm Configuration registration authority availability.");
+
+            if (explanation.Codes.Contains(
+                    LevelXDiagnosticCodes.StateDerivationMismatch,
+                    StringComparer.OrdinalIgnoreCase) ||
+                explanation.Codes.Contains(
+                    LevelXDiagnosticCodes.ControlPlaneStateDivergence,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                failures.Add($"{applicationId} has inconsistent authoritative/runtime state.");
+            }
+            else if (explanation.Codes.Count > 0)
+            {
+                warnings.Add($"{applicationId}: {string.Join(",", explanation.Codes)}");
+            }
+        }
+
+        string evidenceText = string.Join("; ", evidence);
+
+        if (failures.Count > 0)
+        {
+            return new(
+                "control-plane-integration",
+                "Control Plane cross-service agreement",
+                EngineeringDiagnosticStatus.Failed,
+                $"Control Plane integration validation found {failures.Count} failure(s).",
+                string.Join(" ", failures.Concat(warnings)) + (evidenceText.Length == 0 ? string.Empty : " " + evidenceText),
+                Expected: "Diagnostics must discover Configuration state, read Operations merged state, and agree on current Control Plane authority/runtime state.",
+                Actual: string.Join(" | ", failures.Concat(warnings)),
+                Code: LevelXDiagnosticCodes.ControlPlaneStateDivergence);
+        }
+
+        if (warnings.Count > 0)
+        {
+            return new(
+                "control-plane-integration",
+                "Control Plane cross-service agreement",
+                EngineeringDiagnosticStatus.Warning,
+                $"Control Plane integration validation completed with {warnings.Count} warning(s).",
+                string.Join(" ", warnings) + (evidenceText.Length == 0 ? string.Empty : " " + evidenceText),
+                Expected: "Control Plane cross-service state is current and internally consistent.",
+                Actual: string.Join(" | ", warnings));
+        }
+
+        return new(
+            "control-plane-integration",
+            "Control Plane cross-service agreement",
+            EngineeringDiagnosticStatus.Passed,
+            "Configuration discovery, Operations merged state and registration authority evidence agree.",
+            evidenceText,
+            Expected: "Control Plane cross-service state is current and internally consistent.",
+            Actual: "All required Control Plane evidence paths agreed.");
+    }
+
+    private async Task<EngineeringDiagnosticCheckResult> ExecuteStateConsistencyAsync(
+        string id,
+        DiagnosticTargetOptions target,
+        CancellationToken cancellationToken)
+    {
+        LevelXStateExplanation? explanation =
+            await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, cancellationToken)
+                .ConfigureAwait(false);
+
+        if (explanation is null)
+        {
+            return new(
+                id,
+                $"{target.Name} — State consistency",
+                EngineeringDiagnosticStatus.Warning,
+                "Application is registered but is not present in the merged Operations application inventory.",
+                target.ApplicationId,
+                Expected: "Authoritative registration and Operations effective state are both observable.",
+                Actual: "No merged application state was returned.",
+                Code: LevelXDiagnosticCodes.ControlPlaneStateDivergence);
+        }
+
+        EngineeringDiagnosticStatus status = explanation.Result switch
+        {
+            "Failed" => EngineeringDiagnosticStatus.Failed,
+            "Warning" => EngineeringDiagnosticStatus.Warning,
+            _ => EngineeringDiagnosticStatus.Passed
+        };
+
+        string evidence = string.Join(
+            "; ",
+            new[]
+            {
+                $"NowUtc={explanation.NowUtc:O}",
+                $"LastAuthenticatedAtUtc={explanation.LastAuthenticatedAtUtc:O}",
+                $"AuthenticationAgeSeconds={explanation.AuthenticationAgeSeconds?.ToString("0.###") ?? "null"}",
+                $"LastTelemetryAtUtc={explanation.LastTelemetryAtUtc:O}",
+                $"TelemetryAgeSeconds={explanation.TelemetryAgeSeconds?.ToString("0.###") ?? "null"}",
+                $"StaleAfterSeconds={explanation.StaleAfterSeconds:0.###}",
+                $"RegistrationFresh={explanation.RegistrationFresh}",
+                $"TelemetryFresh={explanation.TelemetryFresh}",
+                $"AuthorityAvailable={explanation.AuthorityAvailable}",
+                $"EffectiveState={explanation.EffectiveState}",
+                $"DisplayedState={explanation.DisplayedState ?? "null"}",
+                $"Codes={string.Join(",", explanation.Codes)}"
+            });
+
+        string? code = explanation.Codes.Count == 0
+            ? null
+            : string.Join(",", explanation.Codes);
+
+        return new(
+            id,
+            $"{target.Name} — State consistency",
+            status,
+            string.IsNullOrWhiteSpace(explanation.Reason)
+                ? "Registration, telemetry and effective-state evidence are consistent."
+                : explanation.Reason,
+            evidence,
+            Expected: "Fresh authority/telemetry evidence must reconcile to a consistent effective and displayed state.",
+            Actual: $"Registration={explanation.RegistrationState}; Effective={explanation.EffectiveState}; Displayed={explanation.DisplayedState ?? "null"}",
+            Code: code);
+    }
 
     private async Task<EngineeringDiagnosticCheckResult> ExecuteSelfHealthAsync(CancellationToken cancellationToken)
     {

@@ -166,13 +166,18 @@ public sealed class DiagnosticOrchestrationService(
         EngineeringDiagnosticPolicy.ValidateLevel(request.Level);
         EngineeringDiagnosticPolicy.ValidateReason(request.Level, request.Reason);
 
+        if (EngineeringDiagnosticLevelSemantics.IsDisruptive(request.Level) && !request.AcknowledgeDisruption)
+            throw new ArgumentException("Level 2 and Level 1 require explicit disruption acknowledgement.", nameof(request));
+
+        DiagnosticTarget target = ResolveTarget(request);
+
         List<EngineeringDiagnosticRun> runs = [];
-        EngineeringDiagnosticRun run = await RunLevelAsync(request.Level, request.Reason, requestedBy, cancellationToken);
+        EngineeringDiagnosticRun run = await RunLevelAsync(request.Level, request.Reason, requestedBy, target, cancellationToken);
         runs.Add(run);
 
         while (run.Status != EngineeringDiagnosticStatus.Passed && TryGetAutomaticEvidenceLevel(run.Level, out EngineeringDiagnosticLevel nextAutomatic))
         {
-            run = await RunLevelAsync(nextAutomatic, request.Reason, requestedBy, cancellationToken);
+            run = await RunLevelAsync(nextAutomatic, request.Reason, requestedBy, target, cancellationToken);
             runs.Add(run);
         }
 
@@ -192,16 +197,39 @@ public sealed class DiagnosticOrchestrationService(
         EngineeringDiagnosticLevel level,
         string? reason,
         string requestedBy,
+        DiagnosticTarget target,
         CancellationToken cancellationToken)
     {
+        string application = target.ApplicationId ?? target.TargetId;
         return await engine.RunAsync(
             level,
-            options.ApplicationName,
+            target,
+            application,
             options.EnvironmentName,
             requestedBy,
             reason,
-            remoteCatalog.Build(level, reason),
+            remoteCatalog.Build(level, reason, target),
             cancellationToken);
+    }
+
+    private static DiagnosticTarget ResolveTarget(EngineeringDiagnosticRunRequest request)
+    {
+        return request.TargetType switch
+        {
+            DiagnosticTargetType.ControlPlane => DiagnosticTarget.EntireControlPlane(),
+            DiagnosticTargetType.ControlPlaneComponent => DiagnosticTarget.ComponentTarget(
+                string.IsNullOrWhiteSpace(request.TargetId)
+                    ? throw new ArgumentException("TargetId is required for a Control Plane component.")
+                    : request.TargetId),
+            DiagnosticTargetType.RegisteredApplication => DiagnosticTarget.RegisteredApplication(
+                string.IsNullOrWhiteSpace(request.ApplicationId)
+                    ? throw new ArgumentException("ApplicationId is required for a registered application target.")
+                    : request.ApplicationId,
+                string.IsNullOrWhiteSpace(request.InstanceId)
+                    ? throw new ArgumentException("InstanceId is required for a registered application target.")
+                    : request.InstanceId),
+            _ => throw new ArgumentOutOfRangeException(nameof(request.TargetType))
+        };
     }
 
     private static bool TryGetAutomaticEvidenceLevel(EngineeringDiagnosticLevel current, out EngineeringDiagnosticLevel next)

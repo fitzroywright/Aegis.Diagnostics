@@ -95,11 +95,26 @@ public sealed class ConfigurationDiscoveryCatalog(
             }
 
             ConfigurationApplicationContract[] contracts = await response.Content.ReadFromJsonAsync<ConfigurationApplicationContract[]>(cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
-            DiagnosticTargetOptions[] discovered = contracts
-                .Where(contract => !string.Equals(contract.ApplicationId, options.ApplicationId, StringComparison.OrdinalIgnoreCase))
-                .Where(contract => contract.Diagnostics is not null)
-                .Select(ToTarget)
+            Dictionary<string, ConfigurationApplicationContract> contractsByIdentity = contracts
+                .Where(contract => !string.IsNullOrWhiteSpace(contract.ApplicationId))
+                .GroupBy(contract => IdentityKey(contract.ApplicationId!, contract.InstanceId), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.OrderByDescending(x => x.LastRegisteredAtUtc).First(), StringComparer.OrdinalIgnoreCase);
+
+            RegisteredApplicationInventoryItem[] registered = await LoadRegisteredApplicationsAsync(
+                credential,
+                instanceId,
+                cancellationToken).ConfigureAwait(false);
+
+            DiagnosticTargetOptions[] discovered = registered
+                .Where(item => !string.Equals(item.ApplicationId, options.ApplicationId, StringComparison.OrdinalIgnoreCase))
+                .Where(item => string.Equals(item.RegistrationStatus, "Registered", StringComparison.OrdinalIgnoreCase))
+                .Select(item =>
+                {
+                    contractsByIdentity.TryGetValue(IdentityKey(item.ApplicationId, item.InstanceId), out ConfigurationApplicationContract? contract);
+                    return ToTarget(item, contract);
+                })
                 .OrderBy(target => target.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(target => target.InstanceId, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             lock (gate)
@@ -117,30 +132,77 @@ public sealed class ConfigurationDiscoveryCatalog(
         }
     }
 
-    private static DiagnosticTargetOptions ToTarget(ConfigurationApplicationContract contract)
+    private static DiagnosticTargetOptions ToTarget(
+        RegisteredApplicationInventoryItem item,
+        ConfigurationApplicationContract? contract)
     {
-        ConfigurationDiagnosticsCapability capability = contract.Diagnostics!;
-        string baseUrl = capability.BaseUrl?.Trim() ?? string.Empty;
+        ConfigurationDiagnosticsCapability? capability = contract?.Diagnostics;
+        string baseUrl = capability?.BaseUrl?.Trim() ?? string.Empty;
+        bool supportsRemote = capability?.SupportsRemoteDiagnostics ?? false;
+        bool supportsTelemetry = capability?.SupportsOperationalTelemetry ?? item.TelemetryAvailable;
+
         return new(
-            contract.ApplicationId ?? string.Empty,
-            string.IsNullOrWhiteSpace(contract.DisplayName) ? contract.ApplicationId ?? "Unknown application" : contract.DisplayName,
-            contract.SiteId,
-            contract.InstanceId,
+            item.ApplicationId,
+            string.IsNullOrWhiteSpace(contract?.DisplayName)
+                ? string.IsNullOrWhiteSpace(item.DisplayName) ? item.ApplicationId : item.DisplayName
+                : contract!.DisplayName!,
+            contract?.SiteId,
+            item.InstanceId,
             baseUrl,
-            DefaultPath(capability.HealthPath, "/health"),
-            DefaultPath(capability.DiagnosticsRunPath, "/api/engineering/diagnostics/run"),
-            DefaultPath(capability.DiagnosticsRunsPath, "/api/engineering/diagnostics/runs"),
-            DefaultPath(capability.TelemetryPath, "/api/engineering/diagnostics/telemetry"),
-            capability.SupportsRemoteDiagnostics,
-            capability.SupportsOperationalTelemetry,
-            string.IsNullOrWhiteSpace(capability.AuthenticationScheme) ? "MachineCredential" : capability.AuthenticationScheme,
-            capability.SecretName ?? string.Empty,
-            capability.SupportedLevels is { Length: > 0 } ? capability.SupportedLevels : [1, 2, 3, 4, 5],
-            contract.LastRegisteredAtUtc,
-            contract.Presentation?.IconUrl,
-            contract.Presentation?.ShortName,
-            contract.Presentation?.Accent);
+            DefaultPath(capability?.HealthPath, "/health"),
+            DefaultPath(capability?.DiagnosticsRunPath, "/api/engineering/diagnostics/run"),
+            DefaultPath(capability?.DiagnosticsRunsPath, "/api/engineering/diagnostics/runs"),
+            DefaultPath(capability?.TelemetryPath, "/api/engineering/diagnostics/telemetry"),
+            supportsRemote,
+            supportsTelemetry,
+            string.IsNullOrWhiteSpace(capability?.AuthenticationScheme) ? "MachineCredential" : capability!.AuthenticationScheme!,
+            capability?.SecretName ?? string.Empty,
+            capability?.SupportedLevels is { Length: > 0 } ? capability.SupportedLevels : [5],
+            item.RegistrationObservedAtUtc ?? contract?.LastRegisteredAtUtc,
+            contract?.Presentation?.IconUrl,
+            contract?.Presentation?.ShortName,
+            contract?.Presentation?.Accent);
     }
+
+    private async Task<RegisteredApplicationInventoryItem[]> LoadRegisteredApplicationsAsync(
+        string credential,
+        string instanceId,
+        CancellationToken cancellationToken)
+    {
+        string operationsBaseUrl = AegisControlPlaneEndpoints.ResolveInternal(
+            configuration,
+            AegisControlPlaneService.Operations,
+            logger);
+
+        if (!Uri.TryCreate(operationsBaseUrl, UriKind.Absolute, out Uri? operationsUri))
+            throw new InvalidOperationException("Resolved Operations endpoint is not an absolute URL.");
+
+        HttpClient client = httpClientFactory.CreateClient("operations-activity");
+        using HttpRequestMessage request = new(
+            HttpMethod.Get,
+            new Uri(operationsUri, "/api/operations/registered-applications"));
+        request.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", credential);
+        request.Headers.TryAddWithoutValidation("X-Aegis-Application-Id", options.ApplicationId);
+        request.Headers.TryAddWithoutValidation("X-Aegis-Instance-Id", instanceId);
+        request.Headers.TryAddWithoutValidation("X-Aegis-Correlation-Id", Guid.NewGuid().ToString("N"));
+
+        using HttpResponseMessage response =
+            await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Aegis.Operations registered-application inventory returned HTTP {(int)response.StatusCode}.");
+
+        RegisteredApplicationInventoryEnvelope? envelope =
+            await response.Content.ReadFromJsonAsync<RegisteredApplicationInventoryEnvelope>(
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return envelope?.Applications ?? [];
+    }
+
+    private static string IdentityKey(string applicationId, string? instanceId) =>
+        applicationId.Trim() + "\u001f" + (instanceId?.Trim() ?? string.Empty);
 
     private void SetError(string message)
     {
@@ -149,6 +211,20 @@ public sealed class ConfigurationDiscoveryCatalog(
     }
 
     private static string DefaultPath(string? value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value;
+
+    private sealed record RegisteredApplicationInventoryEnvelope(
+        bool AuthorityAvailable,
+        DateTimeOffset GeneratedAtUtc,
+        RegisteredApplicationInventoryItem[] Applications);
+
+    private sealed record RegisteredApplicationInventoryItem(
+        string ApplicationId,
+        string? DisplayName,
+        string? InstanceId,
+        string RegistrationStatus,
+        DateTimeOffset? RegistrationObservedAtUtc,
+        bool TelemetryAvailable,
+        string? State);
 
     private sealed record ConfigurationApplicationContract(
         string? ApplicationId,

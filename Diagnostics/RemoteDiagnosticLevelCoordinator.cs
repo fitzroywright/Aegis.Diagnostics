@@ -206,6 +206,14 @@ public sealed class RemoteDiagnosticLevelCoordinator(
                 signature))
             return (false, duplicate, "Callback signature is invalid.");
 
+        if (callback.Run.RunId != callback.RunId ||
+            callback.Run.RequestId != callback.RequestId ||
+            callback.Run.CorrelationId != callback.CorrelationId)
+            return (false, duplicate, "Callback envelope identifiers do not match the embedded run.");
+
+        if (!DiagnosticLevelIntegrity.Verify(callback.Run))
+            return (false, duplicate, "Callback result integrity verification failed.");
+
         if (!duplicate)
         {
             pending.TryRemove(callback.RunId, out PendingRemoteRun? removed);

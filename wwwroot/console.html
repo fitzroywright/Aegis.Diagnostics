@@ -68,27 +68,65 @@
 .levels .level small{font-size:10px!important;line-height:1.15!important}
 .level-idle{
  --status-accent:#88cc99;
- display:flex;
- flex-direction:column;
- justify-content:center;
- align-items:flex-start;
- border:1px solid color-mix(in srgb,var(--status-accent) 55%,var(--line-soft));
- border-left:6px solid var(--status-accent);
- border-top:1px solid color-mix(in srgb,var(--status-accent) 55%,var(--line-soft))!important;
- background:linear-gradient(90deg,color-mix(in srgb,var(--status-accent) 13%,#071018),#071018 55%);
+ display:grid;
+ grid-template-columns:8px 1fr;
+ grid-template-rows:auto auto auto;
+ column-gap:10px;
+ align-content:center;
+ align-items:center;
+ min-height:72px!important;
+ padding:8px 10px!important;
+ border:1px solid color-mix(in srgb,var(--status-accent) 62%,#1b2f3d);
+ border-radius:3px!important;
+ border-top:1px solid color-mix(in srgb,var(--status-accent) 62%,#1b2f3d)!important;
+ background:
+  linear-gradient(180deg,rgba(255,255,255,.025),transparent 45%),
+  #03090e;
  color:var(--starship-white);
  cursor:default;
  opacity:1!important;
  filter:none!important;
- box-shadow:inset 0 0 18px color-mix(in srgb,var(--status-accent) 10%,transparent);
+ box-shadow:
+  inset 0 0 0 1px rgba(255,255,255,.025),
+  inset 0 0 22px color-mix(in srgb,var(--status-accent) 10%,transparent);
 }
-.level-idle b{color:var(--status-accent)!important}
-.level-idle small{color:var(--muted)}
+.level-idle::before{
+ content:"";
+ grid-row:1/4;
+ width:8px;
+ height:100%;
+ min-height:48px;
+ border-radius:2px;
+ background:var(--status-accent);
+ box-shadow:0 0 10px color-mix(in srgb,var(--status-accent) 70%,transparent);
+}
+.level-idle b{
+ grid-column:2;
+ color:var(--status-accent)!important;
+ font-size:14px!important;
+ letter-spacing:.12em;
+ text-shadow:0 0 6px color-mix(in srgb,var(--status-accent) 55%,transparent);
+}
+.level-idle .status-sub{
+ grid-column:2;
+ font-size:10px;
+ font-weight:900;
+ letter-spacing:.09em;
+ color:#d7e7ef;
+}
+.level-idle small{
+ grid-column:2;
+ color:#93a9b6!important;
+ font-size:9px!important;
+ line-height:1.2!important;
+ white-space:normal;
+ overflow-wrap:anywhere;
+}
 .level-idle.runner-idle{--status-accent:#88cc99}
 .level-idle.runner-active{--status-accent:#66ccff}
-.level-idle.status-success{--status-accent:var(--radioactive)}
-.level-idle.status-error{--status-accent:var(--sunset-red)}
-.level-idle.status-warning{--status-accent:var(--title-gold)}
+.level-idle.status-success{--status-accent:#75e6a4}
+.level-idle.status-error{--status-accent:#ff5a44}
+.level-idle.status-warning{--status-accent:#ffd166}
 .level-idle.status-unknown{--status-accent:#b79cff}
 .diagnostic-live-title{margin:4px 0!important}
 .diagnostic-level-live-grid{grid-template-columns:1fr!important;gap:6px!important;margin-bottom:8px!important}
@@ -133,7 +171,7 @@
     </section>
     <section id="diagnosticLevelExplain" class="diagnostic-level-explain-panel"></section>
     <section id="diagnosticLevelRunStatus" class="diagnostic-level-run-status" role="status" aria-live="polite"></section>
-    <section class="levels"><div id="diagnosticIdleTile" class="level level-idle runner-idle" aria-live="polite"><b>IDLE</b>READY<small>No diagnostic active</small></div><button class="level" data-level="5"><b>LEVEL 5</b>ROUTINE<small>State consistency and freshness</small></button><button class="level" data-level="4"><b>LEVEL 4</b>INTEGRATION<small>Cross-service validation</small></button><button class="level" data-level="3"><b>LEVEL 3</b>FUNCTIONAL<small>Functional workflow exercise</small></button><button class="level" data-level="2"><b>LEVEL 2</b>FAILURE / RECOVERY<small>Controlled disruptive validation</small></button><button class="level" data-level="1"><b>LEVEL 1</b>EXHAUSTIVE<small>Deep certification</small></button></section>
+    <section class="levels"><div id="diagnosticIdleTile" class="level level-idle runner-idle" aria-live="polite"><b>IDLE</b><span class="status-sub">READY</span><small>No diagnostic active</small></div><button class="level" data-level="5"><b>LEVEL 5</b>ROUTINE<small>State consistency and freshness</small></button><button class="level" data-level="4"><b>LEVEL 4</b>INTEGRATION<small>Cross-service validation</small></button><button class="level" data-level="3"><b>LEVEL 3</b>FUNCTIONAL<small>Functional workflow exercise</small></button><button class="level" data-level="2"><b>LEVEL 2</b>FAILURE / RECOVERY<small>Controlled disruptive validation</small></button><button class="level" data-level="1"><b>LEVEL 1</b>EXHAUSTIVE<small>Deep certification</small></button></section>
     <div id="diagnosticLiveTitle" class="sectiontitle diagnostic-live-title">Live DiagnosticLevel Execution</div>
     <section id="diagnostic-levelLive" class="diagnostic-level-live-grid"><div class="run muted">Loading live DiagnosticLevel state…</div></section>
     <section class="reason-panel"><label for="reason">Engineering reason / incident context</label><textarea id="reason" placeholder="Required for Levels 2 and 1"></textarea></section>
@@ -210,7 +248,11 @@ const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),re
 let diagnosticLevelTargets={controlPlane:[],applications:[]};
 let activeRemoteDiagnosticRunId=localStorage.getItem('aegis.diagnostics.activeRemoteRunId')||'';
 let activeRemoteDiagnosticLevel=Number(localStorage.getItem('aegis.diagnostics.activeRemoteLevel')||0);
-function setRunnerStatus(state,level,detail,kind){
+let runnerStatusShownAt=0;
+let runnerStatusTimer=null;
+let runnerQueuedStatus=null;
+const RUNNER_STATUS_MIN_DWELL_MS=4000;
+function applyRunnerStatus(state,level,detail,kind){
  const tile=document.getElementById('diagnosticIdleTile');
  if(!tile)return;
  const normalized=String(state||'IDLE').toUpperCase();
@@ -236,7 +278,32 @@ function setRunnerStatus(state,level,detail,kind){
  else if(normalized==='INTERRUPTED'&&!detail)small='Diagnostic interrupted';
  else if(normalized==='CANCELLED'&&!detail)small='Diagnostic cancelled';
  else if(normalized==='UNKNOWN'&&!detail)small='Diagnostic state unknown';
- tile.innerHTML='<b>'+esc(label)+'</b>'+esc(sub)+'<small>'+esc(small)+'</small>';
+ tile.innerHTML='<b>'+esc(label)+'</b><span class="status-sub">'+esc(sub)+'</span><small>'+esc(small)+'</small>';
+ runnerStatusShownAt=Date.now();
+}
+function setRunnerStatus(state,level,detail,kind,force){
+ const normalized=String(state||'IDLE').toUpperCase();
+ const now=Date.now();
+ const currentTile=document.getElementById('diagnosticIdleTile');
+ const currentState=currentTile?.querySelector('b')?.textContent?.trim()?.toUpperCase()||'';
+ const terminal=['COMPLETED','FAILED','ERROR','UNAVAILABLE','INTERRUPTED','CANCELLED','UNKNOWN'].includes(currentState);
+ const elapsed=now-runnerStatusShownAt;
+
+ // Do not let an idle/live refresh immediately erase a readable terminal or accepted message.
+ if(!force && elapsed<RUNNER_STATUS_MIN_DWELL_MS &&
+    (terminal || currentState==='ACCEPTED') &&
+    normalized!==currentState){
+   runnerQueuedStatus={state,level,detail,kind};
+   if(runnerStatusTimer)clearTimeout(runnerStatusTimer);
+   runnerStatusTimer=setTimeout(()=>{
+    const next=runnerQueuedStatus;
+    runnerQueuedStatus=null;
+    runnerStatusTimer=null;
+    if(next)applyRunnerStatus(next.state,next.level,next.detail,next.kind);
+   },Math.max(250,RUNNER_STATUS_MIN_DWELL_MS-elapsed));
+   return;
+ }
+ applyRunnerStatus(state,level,detail,kind);
 }
 function setRunnerIdleState(idle){
  setRunnerStatus(idle?'IDLE':'BUSY',activeRemoteDiagnosticLevel||0,idle?'No diagnostic active':'Diagnostic in progress');
@@ -573,7 +640,7 @@ function showDiagnosticLevelRunStatus(kind,title,message,detail){
  const state=kind==='error'
   ? (title.includes('unavailable')?'UNAVAILABLE':'ERROR')
   : (title.includes('accepted')?'ACCEPTED':title.includes('started')?'RUNNING':'STATUS');
- setRunnerStatus(state,level,[message,detail].filter(Boolean).join(' · '),kind==='error'?'error':kind==='success'?'active':kind);
+ setRunnerStatus(state,level,[message,detail].filter(Boolean).join(' · '),kind==='error'?'error':kind==='success'?'active':kind,true);
 }
 async function readDiagnosticLevelError(response){
  let message='DiagnosticLevel request failed.';

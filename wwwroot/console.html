@@ -165,7 +165,7 @@
   <main class="detail-scroll"><div class="aegis-busy-overlay" id="aegisBusyOverlay" aria-hidden="true"><div class="aegis-sensor" role="status" aria-live="polite"><div class="aegis-sensor-ticks"></div><div class="aegis-sensor-ring r1"></div><div class="aegis-sensor-ring r2"></div><div class="aegis-sensor-ring r3"></div><div class="aegis-sensor-sweep"></div><div class="aegis-sensor-pulse"></div><i class="aegis-sensor-dot d1"></i><i class="aegis-sensor-dot d2"></i><i class="aegis-sensor-dot d3"></i><div class="aegis-sensor-core"><i></i><i></i><i></i><i></i></div><div class="aegis-sensor-copy"><b>Processing</b><span id="aegisBusyText">Analyzing system state</span></div></div></div></div>
     <section class="page-head"><div><p>Targeted DiagnosticLevel diagnostics from Level 5 routine checks through Level 1 exhaustive certification</p><div id="accessSummary" class="muted">Checking permissions…</div></div></section>
     <section class="diagnostic-level-launcher">
-      <div class="diagnostic-level-field"><label for="targetType">Target Type</label><select id="targetType"><option value="1">Control Plane</option><option value="2">Control Plane Component</option><option value="4">Common Component</option><option value="3">Registered Application</option></select></div>
+      <div class="diagnostic-level-field"><label for="targetType">Target Type</label><select id="targetType"><option value="1">Control Plane</option><option value="2">Control Plane Component</option><option value="4">Common Tools</option><option value="3">Registered Application</option></select></div>
       <div class="diagnostic-level-field"><label for="diagnosticTarget">Target</label><select id="diagnosticTarget"><option value="control-plane">Entire Control Plane</option></select></div>
       <button id="explainTarget" class="diagnostic-level-explain" type="button">Explain State</button>
     </section>
@@ -428,11 +428,11 @@ async function loadCatalogue(){
   const r=await fetch(api+'/diagnostic-level/catalogue',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
   const d=await r.json(),tests=d.tests||[],summary=d.summary||[];
   const components=[...new Set(summary.map(x=>x.component))];
-  diagnosticLevelCatalogue.innerHTML='<article class="run"><div class="runmeta"><b>'+tests.length+' TESTS</b><br><small>Stable DiagnosticLevel IDs</small></div><div><b>Common.* catalogue</b><div class="muted">Requested levels are cumulative: L5 only; L4 adds L4; L3 adds L3; L2 adds L2; L1 adds L1.</div></div><div class="status-Passed"><b>CATALOGUED</b></div></article>'+
+  diagnosticLevelCatalogue.innerHTML='<article class="run"><div class="runmeta"><b>'+tests.length+' TESTS</b><br><small>Stable DiagnosticLevel IDs</small></div><div><b>Common Tools catalogue</b><div class="muted">Requested levels are cumulative: L5 only; L4 adds L4; L3 adds L3; L2 adds L2; L1 adds L1.</div></div><div class="status-Passed"><b>CATALOGUED</b></div></article>'+
    components.map(component=>{
     const rows=summary.filter(x=>x.component===component),count=rows.reduce((a,x)=>a+x.count,0);
     const levels=[5,4,3,2,1].map(level=>'L'+level+': '+((rows.find(x=>x.level===level)||{}).count||0)).join(' · ');
-    return '<article class="run"><div class="runmeta"><b>'+esc(component)+'</b><br><small>'+count+' tests</small></div><div><b>'+esc(levels)+'</b><div class="muted">Level 5/4 tests are non-destructive; deeper Common tests use isolated temporary/in-memory certification scenarios unless explicitly documented otherwise.</div></div><div class="status-Passed"><b>'+count+'</b></div></article>';
+    return '<article class="run"><div class="runmeta"><b>'+esc(displayCommonToolName(component))+'</b><br><small>'+count+' tests</small></div><div><b>'+esc(levels)+'</b><div class="muted">Level 5/4 tests are non-destructive; deeper shared-tool tests use isolated temporary/in-memory certification scenarios unless explicitly documented otherwise.</div></div><div class="status-Passed"><b>'+count+'</b></div></article>';
    }).join('');
  }catch(e){diagnosticLevelCatalogue.innerHTML='<div class="notice">Diagnostic catalogue unavailable: '+esc(e.message)+'</div>';}
 }
@@ -468,7 +468,7 @@ function renderTargetOptions(){
  const type=Number(targetType.value);let options=[];
  if(type===1)options=[{value:'control-plane',label:'Entire Control Plane'}];
  else if(type===2)options=(diagnosticLevelTargets.controlPlane||[]).filter(x=>x.targetId!=='control-plane').map(x=>({value:x.targetId,label:x.label}));
- else if(type===4)options=(diagnosticLevelTargets.commonComponents||[]).map(x=>({value:x.targetId,label:x.label}));
+ else if(type===4)options=(diagnosticLevelTargets.commonComponents||[]).map(x=>({value:x.targetId,label:displayCommonToolName(x.label||x.targetId)}));
  else options=(diagnosticLevelTargets.applications||[]).map(x=>({value:(x.applicationId||'')+'|'+(x.instanceId||''),label:(x.name||x.applicationId)+' / '+(x.instanceId||'Default')}));
  diagnosticTarget.innerHTML=options.map(x=>'<option value="'+esc(x.value)+'">'+esc(x.label)+'</option>').join('')||'<option value="">No targets available</option>';
  document.getElementById('explainTarget').disabled=type!==3||!diagnosticTarget.value;
@@ -504,6 +504,7 @@ const hxSelected=new Set();
 const hxStateName=v=>typeof v==='string'&&!/^\\d+$/.test(v)?v:(hxStateNames[Number(v)]||String(v??'Unknown'));
 const hxDeliveryName=v=>typeof v==='string'&&!/^\\d+$/.test(v)?v:(hxDeliveryNames[Number(v)]||String(v??'Unknown'));
 const hxTestStatusName=v=>typeof v==='string'&&!/^\\d+$/.test(v)?v:(hxTestStatusNames[Number(v)]||String(v??'Unknown'));
+const displayCommonToolName=v=>String(v??'').replace(/^Common\./i,'');
 const hxIso=v=>{if(!v)return'';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toISOString()};
 const hxDuration=(start,end)=>{const s=new Date(start),e=end?new Date(end):new Date();if(Number.isNaN(s.getTime())||Number.isNaN(e.getTime()))return'—';const sec=Math.max(0,Math.floor((e.getTime()-s.getTime())/1000));return sec<60?sec+' sec':Math.floor(sec/60)+'m '+(sec%60)+'s'};
 const hxElapsed=start=>hxDuration(start,null);

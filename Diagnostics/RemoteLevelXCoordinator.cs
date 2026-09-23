@@ -176,7 +176,7 @@ public sealed class RemoteLevelXCoordinator(
         Guid RequestId,
         Guid CorrelationId,
         string ApplicationId,
-        string InstanceId,
+        string? InstanceId,
         EngineeringDiagnosticLevel Level,
         DateTimeOffset AcceptedAtUtc,
         DateTimeOffset LastUpdatedAtUtc,

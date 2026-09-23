@@ -11,19 +11,17 @@ public sealed class CommonComponentDiagnosticCatalogTests
     [Fact]
     public void Catalogue_has_unique_stable_test_ids()
     {
-        CommonComponentDiagnosticCatalog catalog = Create();
-        string[] ids = catalog.Catalogue.Select(x => x.TestId).ToArray();
+        LevelXCatalogueEntry[] entries = AllEntries();
+        string[] ids = entries.Select(x => x.TestId).ToArray();
 
-        Assert.Equal(49, ids.Length);
+        Assert.Equal(85, ids.Length);
         Assert.Equal(ids.Length, ids.Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
     [Fact]
     public void Level5_and_Level4_tests_are_non_destructive()
     {
-        CommonComponentDiagnosticCatalog catalog = Create();
-
-        LevelXCatalogueEntry[] unsafeEntries = catalog.Catalogue
+        LevelXCatalogueEntry[] unsafeEntries = AllEntries()
             .Where(x => x.IntroducedAtLevel is EngineeringDiagnosticLevel.Level5Scan or EngineeringDiagnosticLevel.Level4Analysis)
             .Where(x => x.Destructive)
             .ToArray();
@@ -32,17 +30,34 @@ public sealed class CommonComponentDiagnosticCatalogTests
     }
 
     [Theory]
-    [InlineData("Common.Diagnostics", 8)]
-    [InlineData("Common.Registration", 9)]
-    [InlineData("Common.Security", 8)]
-    [InlineData("Common.Secrets", 8)]
-    [InlineData("Common.Messaging", 10)]
-    [InlineData("Common.Storage", 6)]
+    [InlineData("Common.Diagnostics", 14)]
+    [InlineData("Common.Registration", 15)]
+    [InlineData("Common.Security", 14)]
+    [InlineData("Common.Secrets", 14)]
+    [InlineData("Common.Messaging", 16)]
+    [InlineData("Common.Storage", 12)]
     public void Each_common_component_has_multiple_discrete_tests(string component, int expected)
     {
-        CommonComponentDiagnosticCatalog catalog = Create();
-        Assert.Equal(expected, catalog.Catalogue.Count(x => x.Component.Equals(component, StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(expected, AllEntries().Count(x => x.Component.Equals(component, StringComparison.OrdinalIgnoreCase)));
     }
+
+    [Theory]
+    [InlineData("Common.Diagnostics")]
+    [InlineData("Common.Registration")]
+    [InlineData("Common.Security")]
+    [InlineData("Common.Secrets")]
+    [InlineData("Common.Messaging")]
+    [InlineData("Common.Storage")]
+    public void Every_common_component_has_multiple_tests_at_every_level(string component)
+    {
+        LevelXCatalogueEntry[] entries = AllEntries().Where(x => x.Component.Equals(component, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        foreach (EngineeringDiagnosticLevel level in EngineeringDiagnosticLevelSemantics.StarfleetOrder)
+            Assert.True(entries.Count(x => x.IntroducedAtLevel == level) >= 2, $"{component} needs at least two discrete tests introduced at Level {(int)level}.");
+    }
+
+    private static LevelXCatalogueEntry[] AllEntries()
+        => Create().Catalogue.Concat(new CommonIsolatedCertificationCatalog().Catalogue).ToArray();
 
     private static CommonComponentDiagnosticCatalog Create()
     {

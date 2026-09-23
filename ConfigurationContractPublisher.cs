@@ -39,7 +39,7 @@ public sealed class ConfigurationContractPublisher(
             JsonObject contract = JsonNode.Parse(await File.ReadAllTextAsync(path, cancellationToken))!.AsObject();
             contract["version"] = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
             contract["siteId"] = NullIfBlank(configuration["Site:Id"] ?? configuration["Diagnostics:SiteId"]);
-            contract["instanceId"] = NullIfBlank(configuration["Service:Identity"] ?? configuration["Diagnostics:InstanceId"] ?? Environment.MachineName);
+            contract["instanceId"] = NullIfBlank(options.InstanceId ?? configuration["Service:Identity"] ?? Environment.MachineName);
             contract["presentation"] = new JsonObject
             {
                 ["iconUrl"] = configuration["Aegis:Presentation:IconUrl"],

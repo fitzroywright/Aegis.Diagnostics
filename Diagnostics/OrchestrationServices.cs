@@ -175,12 +175,6 @@ public sealed class DiagnosticOrchestrationService(
         EngineeringDiagnosticRun run = await RunLevelAsync(request.Level, request.Reason, requestedBy, target, cancellationToken);
         runs.Add(run);
 
-        while (run.Status != EngineeringDiagnosticStatus.Passed && TryGetAutomaticEvidenceLevel(run.Level, out EngineeringDiagnosticLevel nextAutomatic))
-        {
-            run = await RunLevelAsync(nextAutomatic, request.Reason, requestedBy, target, cancellationToken);
-            runs.Add(run);
-        }
-
         IReadOnlyList<EngineeringDiagnosticRun> recent = await store.GetRecentAsync(100, cancellationToken);
         IReadOnlyList<CorrelatedIncident> incidents = correlation.Correlate(recent);
         IReadOnlyList<DiagnosticPlaybook> matched = runs.SelectMany(playbooks.Match).DistinctBy(playbook => playbook.Id).ToArray();
@@ -232,17 +226,6 @@ public sealed class DiagnosticOrchestrationService(
         };
     }
 
-    private static bool TryGetAutomaticEvidenceLevel(EngineeringDiagnosticLevel current, out EngineeringDiagnosticLevel next)
-    {
-        next = current switch
-        {
-            EngineeringDiagnosticLevel.Level5Scan => EngineeringDiagnosticLevel.Level4Analysis,
-            EngineeringDiagnosticLevel.Level4Analysis => EngineeringDiagnosticLevel.Level3Verification,
-            _ => default
-        };
-        return current is EngineeringDiagnosticLevel.Level5Scan or EngineeringDiagnosticLevel.Level4Analysis;
-    }
-
     private static EngineeringDiagnosticLevel? RecommendNextLevel(EngineeringDiagnosticRun run)
     {
         if (run.Status == EngineeringDiagnosticStatus.Passed) return null;
@@ -263,7 +246,7 @@ public sealed class DiagnosticOrchestrationService(
         int executedLevels)
     {
         string orchestrationText = executedLevels > 1
-            ? $"Aegis.Diagnostics automatically completed {executedLevels} non-destructive evidence levels before stopping. "
+            ? $"Aegis.Diagnostics completed {executedLevels} requested diagnostic runs. "
             : string.Empty;
         if (run.Status == EngineeringDiagnosticStatus.Passed)
             return $"{orchestrationText}No further escalation is recommended because the final diagnostic level passed.";

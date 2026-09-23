@@ -54,6 +54,7 @@ internal static class DiagnosticsApi
                 {
                     new { value = "ControlPlane", label = "Control Plane" },
                     new { value = "ControlPlaneComponent", label = "Control Plane Component" },
+                    new { value = "CommonComponent", label = "Common Component" },
                     new { value = "RegisteredApplication", label = "Registered Application" }
                 },
                 controlPlane = new[]
@@ -64,6 +65,10 @@ internal static class DiagnosticsApi
                     new { targetId = ControlPlaneDiagnosticTargets.Diagnostics, label = "Diagnostics" },
                     new { targetId = ControlPlaneDiagnosticTargets.Registration, label = "Registration" }
                 },
+                commonComponents = CommonDiagnosticTargets.Components
+                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                    .Select(x => new { targetId = x, label = x })
+                    .ToArray(),
                 applications = discovery.Targets.Select(target => new
                 {
                     target.ApplicationId,
@@ -144,10 +149,23 @@ internal static class DiagnosticsApi
             return Results.Accepted();
         });
 
-        app.MapGet("/api/engineering/diagnostics/levelx/catalogue", (HttpContext c) =>
+        app.MapGet("/api/engineering/diagnostics/levelx/catalogue", (HttpContext c, CommonComponentDiagnosticCatalog commonComponents) =>
         {
             if (!View(c)) return Results.Forbid();
-            return Results.Ok(new[]
+            return Results.Ok(new
+            {
+                tests = commonComponents.Catalogue
+                    .OrderBy(x => x.Component, StringComparer.OrdinalIgnoreCase)
+                    .ThenByDescending(x => (int)x.IntroducedAtLevel)
+                    .ThenBy(x => x.TestId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                summary = commonComponents.Catalogue
+                    .GroupBy(x => new { x.Component, x.IntroducedAtLevel })
+                    .Select(g => new { g.Key.Component, level = (int)g.Key.IntroducedAtLevel, count = g.Count() })
+                    .OrderBy(x => x.Component)
+                    .ThenByDescending(x => x.level)
+                    .ToArray(),
+                levels = new[]
             {
                 new
                 {
@@ -213,6 +231,8 @@ internal static class DiagnosticsApi
                         "14-test isolated Registration certification runner not yet complete"
                     }
                 }
+            }
+                };
             });
         });
 

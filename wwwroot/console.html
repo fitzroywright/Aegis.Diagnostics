@@ -56,11 +56,8 @@
    inset 0 0 24px color-mix(in srgb,var(--level-accent) 34%,transparent);
  }
 }
-.level[data-level="5"]:hover{box-shadow:inset 0 0 0 1px #66ccff55}
-.level[data-level="4"]:hover{box-shadow:inset 0 0 0 1px #5588ee66}
-.level[data-level="3"]:hover{box-shadow:inset 0 0 0 1px #ffcc6666}
-.level[data-level="2"]:hover{box-shadow:inset 0 0 0 1px #ff8a3d66}
-.level[data-level="1"]:hover{box-shadow:inset 0 0 0 1px #ff350066}
+.level[data-level]:not(.level-running):hover{box-shadow:none;filter:brightness(1.05)}
+.level[data-level]:not(.level-running){box-shadow:none}
 .engineer-notes{margin:0 0 14px}.engineer-note-entry{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px}.note-actions{display:flex;align-items:center;gap:8px;align-self:stretch}.engineer-note-entry textarea{min-height:68px;resize:vertical;background:#071722;color:var(--starship-white);border:1px solid var(--line);border-radius:8px;padding:10px}.engineer-note-entry button{min-width:110px;border:1px solid var(--line);border-radius:8px;background:var(--alpha-blue);color:#071018;font-weight:900;cursor:pointer}.engineer-note-grid{width:100%;border-collapse:collapse}.engineer-note-grid th{background:#071b29;color:var(--arctic-ice);font-size:11px;text-align:left;padding:9px}.engineer-note-grid td{padding:9px;border-bottom:1px solid var(--line-soft);vertical-align:top}.engineer-note-grid td:first-child{width:180px;white-space:nowrap}.engineer-note-grid td:nth-child(2){width:180px;white-space:nowrap}.engineer-note-grid td:nth-child(3){white-space:pre-wrap;overflow-wrap:anywhere}.note-state{display:inline-block;border:1px solid var(--line);border-radius:7px;padding:4px 7px;font-weight:800;font-size:10px}.note-state.Active{color:var(--radioactive)}.note-state.Voided,.note-state.Redacted{color:var(--title-gold);border-color:#6b5324}.note-disposition{display:flex;gap:6px}.note-disposition button{border:1px solid var(--line);border-radius:6px;padding:5px 7px;background:#0b1b28;color:var(--starship-white);font-size:10px;font-weight:800;cursor:pointer}.note-disposition button:hover{border-color:var(--title-gold)}.record-btn{width:38px;height:38px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--title-gold);color:#071018;cursor:pointer}.record-btn svg{width:20px;height:20px;fill:currentColor}.record-btn.recording{background:var(--sunset-red);color:#fff;box-shadow:0 0 0 4px rgba(255,53,0,.15)}.record-state{min-width:120px;text-align:right;color:var(--muted);font-size:11px}.diagnostic-level-launcher{display:grid;grid-template-columns:minmax(160px,.65fr) minmax(230px,1.35fr) auto;gap:8px;align-items:end;margin:0 0 8px;padding:8px 10px;border:1px solid var(--line-soft);border-top:2px solid var(--title-gold);border-radius:8px;background:#071018}
 .page-head{margin-bottom:8px!important}
 .levels{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:8px!important;margin:6px 0 8px!important}
@@ -86,9 +83,7 @@
  cursor:default;
  opacity:1!important;
  filter:none!important;
- box-shadow:
-  inset 0 0 0 1px rgba(255,255,255,.025),
-  inset 0 0 22px color-mix(in srgb,var(--status-accent) 10%,transparent);
+ box-shadow:none;
 }
 .level-idle::before{
  content:"";
@@ -98,7 +93,7 @@
  min-height:48px;
  border-radius:2px;
  background:var(--status-accent);
- box-shadow:0 0 10px color-mix(in srgb,var(--status-accent) 70%,transparent);
+ box-shadow:none;
 }
 .level-idle b{
  grid-column:2;
@@ -128,6 +123,9 @@
 .level-idle.status-error{--status-accent:#ff5a44}
 .level-idle.status-warning{--status-accent:#ffd166}
 .level-idle.status-unknown{--status-accent:#b79cff}
+.level-idle.runner-active::before{box-shadow:0 0 10px color-mix(in srgb,var(--status-accent) 70%,transparent)}
+.level-idle.runner-active{box-shadow:inset 0 0 16px color-mix(in srgb,var(--status-accent) 9%,transparent)}
+.level-idle.runner-idle,.level-idle.status-success,.level-idle.status-error,.level-idle.status-warning,.level-idle.status-unknown{box-shadow:none}
 .diagnostic-live-title{margin:4px 0!important}
 .diagnostic-level-live-grid{grid-template-columns:1fr!important;gap:6px!important;margin-bottom:8px!important}
 .diagnostic-level-live-card{padding:8px 10px!important;border-radius:7px!important;display:grid;grid-template-columns:minmax(180px,.7fr) minmax(180px,.65fr) minmax(260px,1.4fr);gap:4px 14px;align-items:center}

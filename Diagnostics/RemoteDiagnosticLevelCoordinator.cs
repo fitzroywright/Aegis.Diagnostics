@@ -36,7 +36,9 @@ public sealed class RemoteDiagnosticLevelCoordinator(
             level = (int)x.Level,
             x.AcceptedAtUtc,
             x.LastUpdatedAtUtc,
-            state = x.State.ToString()
+            state = x.State.ToString(),
+            x.CurrentTestId,
+            x.CurrentTestName
         })
         .ToArray();
 
@@ -116,7 +118,11 @@ public sealed class RemoteDiagnosticLevelCoordinator(
                 accepted.AcceptedAtUtc,
                 accepted.AcceptedAtUtc,
                 DiagnosticLevelExecutionState.Running,
-                target.SecretName);
+                target.SecretName,
+                target.BaseUrl,
+                target.DiagnosticsRunsPath,
+                null,
+                null);
 
             var placeholder = new DiagnosticLevelRunRecord(
                 accepted.RunId,
@@ -224,6 +230,99 @@ public sealed class RemoteDiagnosticLevelCoordinator(
         return (true, duplicate, null);
     }
 
+    public async Task RefreshPendingProgressAsync(
+        CancellationToken cancellationToken = default)
+    {
+        foreach ((Guid runId, PendingRemoteRun value) in pending.ToArray())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!Uri.TryCreate(value.BaseUrl, UriKind.Absolute, out Uri? baseUri))
+                continue;
+
+            string? credential = await ResolveCredentialAsync(value.SecretName, cancellationToken)
+                .ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(credential))
+                continue;
+
+            string runsPath = string.IsNullOrWhiteSpace(value.RunsPath)
+                ? "/api/engineering/diagnostics/diagnostic-level/runs"
+                : value.RunsPath;
+
+            Uri runUri = new(
+                baseUri,
+                runsPath.TrimEnd('/') + "/" + runId.ToString("D"));
+
+            string timestamp = DateTimeOffset.UtcNow.ToString("O");
+            string nonce = Guid.NewGuid().ToString("N");
+            string signature = DiagnosticLevelRequestSigning.CreateRequestSignature(
+                credential,
+                "GET",
+                runUri.AbsolutePath,
+                timestamp,
+                nonce);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, runUri);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Diagnostics-Timestamp", timestamp);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Diagnostics-Nonce", nonce);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Diagnostics-Signature", signature);
+            request.Headers.TryAddWithoutValidation("X-Aegis-Application-Id", "Aegis.Diagnostics");
+
+            try
+            {
+                HttpClient client = httpClientFactory.CreateClient("diagnostics-targets");
+                using HttpResponseMessage response =
+                    await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                    continue;
+
+                DiagnosticLevelRunRecord? run =
+                    await response.Content.ReadFromJsonAsync<DiagnosticLevelRunRecord>(
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (run is null)
+                    continue;
+
+                pending[runId] = value with
+                {
+                    State = run.ExecutionState,
+                    LastUpdatedAtUtc = run.LastProgressAtUtc ?? DateTimeOffset.UtcNow,
+                    CurrentTestId = run.CurrentTestId,
+                    CurrentTestName = run.CurrentTestName
+                };
+
+                DiagnosticLevelRunRecord? stored =
+                    await runStore.GetAsync(runId, cancellationToken).ConfigureAwait(false);
+                if (stored is not null)
+                {
+                    await runStore.SaveAsync(
+                        stored with
+                        {
+                            ExecutionState = run.ExecutionState,
+                            StartedAtUtc = run.StartedAtUtc ?? stored.StartedAtUtc,
+                            CompletedAtUtc = run.CompletedAtUtc,
+                            CurrentTestId = run.CurrentTestId,
+                            CurrentTestName = run.CurrentTestName,
+                            LastProgressAtUtc = run.LastProgressAtUtc,
+                            Tests = run.Tests
+                        },
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+            {
+                logger.LogDebug(
+                    exception,
+                    "Unable to refresh live DiagnosticLevel progress. RunId={RunId}",
+                    runId);
+            }
+        }
+    }
+
     public async Task MarkUnknownAfterAsync(
         TimeSpan staleAfter,
         CancellationToken cancellationToken = default)
@@ -303,5 +402,9 @@ public sealed class RemoteDiagnosticLevelCoordinator(
         DateTimeOffset AcceptedAtUtc,
         DateTimeOffset LastUpdatedAtUtc,
         DiagnosticLevelExecutionState State,
-        string? SecretName);
+        string? SecretName,
+        string BaseUrl,
+        string RunsPath,
+        string? CurrentTestId,
+        string? CurrentTestName);
 }

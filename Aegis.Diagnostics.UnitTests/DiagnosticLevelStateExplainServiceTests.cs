@@ -8,7 +8,7 @@ using System.Net;
 using System.Text;
 using Xunit;
 
-public sealed class LevelXStateExplainServiceTests
+public sealed class DiagnosticLevelStateExplainServiceTests
 {
     [Fact]
     public async Task FreshRegistration_WithStaleTelemetry_DoesNotReportStateDerivationMismatch()
@@ -35,12 +35,12 @@ public sealed class LevelXStateExplainServiceTests
         }
         """;
 
-        LevelXStateExplanation result = await ExecuteAsync(json);
+        DiagnosticLevelStateExplanation result = await ExecuteAsync(json);
 
         Assert.True(result.RegistrationFresh);
         Assert.False(result.TelemetryFresh);
-        Assert.Contains(LevelXDiagnosticCodes.StaleTelemetry, result.Codes);
-        Assert.DoesNotContain(LevelXDiagnosticCodes.StateDerivationMismatch, result.Codes);
+        Assert.Contains(DiagnosticLevelDiagnosticCodes.StaleTelemetry, result.Codes);
+        Assert.DoesNotContain(DiagnosticLevelDiagnosticCodes.StateDerivationMismatch, result.Codes);
         Assert.Equal("Warning", result.Result);
     }
 
@@ -69,13 +69,13 @@ public sealed class LevelXStateExplainServiceTests
         }
         """;
 
-        LevelXStateExplanation result = await ExecuteAsync(json);
+        DiagnosticLevelStateExplanation result = await ExecuteAsync(json);
 
-        Assert.Contains(LevelXDiagnosticCodes.StateDerivationMismatch, result.Codes);
+        Assert.Contains(DiagnosticLevelDiagnosticCodes.StateDerivationMismatch, result.Codes);
         Assert.Equal("Failed", result.Result);
     }
 
-    private static async Task<LevelXStateExplanation> ExecuteAsync(string json)
+    private static async Task<DiagnosticLevelStateExplanation> ExecuteAsync(string json)
     {
         string credentialFile = Path.GetTempFileName();
         await File.WriteAllTextAsync(credentialFile, "test-credential");
@@ -92,13 +92,13 @@ public sealed class LevelXStateExplainServiceTests
                 .Build();
 
             var handler = new StaticHandler(json);
-            var service = new LevelXStateExplainService(
+            var service = new DiagnosticLevelStateExplainService(
                 new TestHttpClientFactory(handler),
                 configuration,
                 new DiagnosticsOptions { InstanceId = "DIAG-TEST" },
-                NullLogger<LevelXStateExplainService>.Instance);
+                NullLogger<DiagnosticLevelStateExplainService>.Instance);
 
-            return Assert.IsType<LevelXStateExplanation>(
+            return Assert.IsType<DiagnosticLevelStateExplanation>(
                 await service.ExplainAsync("Aegis.Hello", "Production"));
         }
         finally

@@ -205,15 +205,15 @@ public sealed class RemoteDiagnosticCatalogTests
         public bool IsStale => false;
     }
 
-    private sealed class TestStateExplainService : ILevelXStateExplainService
+    private sealed class TestStateExplainService : IDiagnosticLevelStateExplainService
     {
-        public Task<LevelXStateExplanation?> ExplainAsync(
+        public Task<DiagnosticLevelStateExplanation?> ExplainAsync(
             string applicationId,
             string? instanceId,
             CancellationToken cancellationToken = default)
         {
             DateTimeOffset now = DateTimeOffset.UtcNow;
-            return Task.FromResult<LevelXStateExplanation?>(new(
+            return Task.FromResult<DiagnosticLevelStateExplanation?>(new(
                 applicationId,
                 instanceId,
                 "Registered",

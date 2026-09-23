@@ -5,7 +5,7 @@ using Common.Registration;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-public sealed record LevelXStateExplanation(
+public sealed record DiagnosticLevelStateExplanation(
     string ApplicationId,
     string? InstanceId,
     string RegistrationState,
@@ -25,21 +25,21 @@ public sealed record LevelXStateExplanation(
     IReadOnlyList<string> Codes,
     string Reason);
 
-public interface ILevelXStateExplainService
+public interface IDiagnosticLevelStateExplainService
 {
-    Task<LevelXStateExplanation?> ExplainAsync(
+    Task<DiagnosticLevelStateExplanation?> ExplainAsync(
         string applicationId,
         string? instanceId,
         CancellationToken cancellationToken = default);
 }
 
-public sealed class LevelXStateExplainService(
+public sealed class DiagnosticLevelStateExplainService(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     DiagnosticsOptions options,
-    ILogger<LevelXStateExplainService> logger) : ILevelXStateExplainService
+    ILogger<DiagnosticLevelStateExplainService> logger) : IDiagnosticLevelStateExplainService
 {
-    public async Task<LevelXStateExplanation?> ExplainAsync(
+    public async Task<DiagnosticLevelStateExplanation?> ExplainAsync(
         string applicationId,
         string? instanceId,
         CancellationToken cancellationToken = default)
@@ -150,33 +150,33 @@ public sealed class LevelXStateExplainService(
         List<string> codes = [];
 
         if (!authorityAvailable)
-            codes.Add(LevelXDiagnosticCodes.AuthorityUnavailable);
+            codes.Add(DiagnosticLevelDiagnosticCodes.AuthorityUnavailable);
 
         if (lastAuthenticated.HasValue && !registrationFresh &&
             registrationState.Equals("Registered", StringComparison.OrdinalIgnoreCase))
-            codes.Add(LevelXDiagnosticCodes.StaleAuthority);
+            codes.Add(DiagnosticLevelDiagnosticCodes.StaleAuthority);
 
         if (telemetryAvailable && !telemetryFresh)
-            codes.Add(LevelXDiagnosticCodes.StaleTelemetry);
+            codes.Add(DiagnosticLevelDiagnosticCodes.StaleTelemetry);
 
         if (registrationFresh &&
             effectiveState.Equals("Offline", StringComparison.OrdinalIgnoreCase))
-            codes.Add(LevelXDiagnosticCodes.StateDerivationMismatch);
+            codes.Add(DiagnosticLevelDiagnosticCodes.StateDerivationMismatch);
 
         if (!string.IsNullOrWhiteSpace(displayedState) &&
             registrationFresh &&
             displayedState.Contains("Offline", StringComparison.OrdinalIgnoreCase))
-            codes.Add(LevelXDiagnosticCodes.StateDerivationMismatch);
+            codes.Add(DiagnosticLevelDiagnosticCodes.StateDerivationMismatch);
 
         string result = codes.Any(code =>
-                code == LevelXDiagnosticCodes.StateDerivationMismatch ||
-                code == LevelXDiagnosticCodes.ControlPlaneStateDivergence)
+                code == DiagnosticLevelDiagnosticCodes.StateDerivationMismatch ||
+                code == DiagnosticLevelDiagnosticCodes.ControlPlaneStateDivergence)
             ? "Failed"
             : codes.Count > 0
                 ? "Warning"
                 : "Passed";
 
-        return new LevelXStateExplanation(
+        return new DiagnosticLevelStateExplanation(
             applicationId,
             Text(item, "instanceId"),
             registrationState,

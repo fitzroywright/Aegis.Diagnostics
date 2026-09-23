@@ -8,17 +8,17 @@ using System.Text.Json;
 using Common.Diagnostics;
 using Common.Secrets;
 
-public sealed record RemoteLevelXDispatchResult(
+public sealed record RemoteDiagnosticLevelDispatchResult(
     bool Accepted,
-    LevelXRunAccepted? Acceptance,
-    LevelXDeliveryState DeliveryState,
+    DiagnosticLevelRunAccepted? Acceptance,
+    DiagnosticLevelDeliveryState DeliveryState,
     string? Error = null);
 
-public sealed class RemoteLevelXCoordinator(
+public sealed class RemoteDiagnosticLevelCoordinator(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
-    LevelXNonceCache nonceCache,
-    ILogger<RemoteLevelXCoordinator> logger)
+    DiagnosticLevelNonceCache nonceCache,
+    ILogger<RemoteDiagnosticLevelCoordinator> logger)
 {
     private readonly ConcurrentDictionary<Guid, PendingRemoteRun> pending = new();
     private readonly ConcurrentDictionary<Guid, PendingRemoteRun> completed = new();
@@ -39,7 +39,7 @@ public sealed class RemoteLevelXCoordinator(
         })
         .ToArray();
 
-    public async Task<RemoteLevelXDispatchResult> RequestAsync(
+    public async Task<RemoteDiagnosticLevelDispatchResult> RequestAsync(
         DiagnosticTargetOptions target,
         EngineeringDiagnosticLevel level,
         string requestedBy,
@@ -48,20 +48,20 @@ public sealed class RemoteLevelXCoordinator(
         CancellationToken cancellationToken)
     {
         if (!target.SupportsRemoteDiagnostics)
-            return new(false, null, LevelXDeliveryState.Rejected, "Target does not advertise remote diagnostics.");
+            return new(false, null, DiagnosticLevelDeliveryState.Rejected, "Target does not advertise remote diagnostics.");
 
         if (!Uri.TryCreate(target.BaseUrl, UriKind.Absolute, out Uri? baseUri))
-            return new(false, null, LevelXDeliveryState.NotReachable, "Target public URL is unresolved.");
+            return new(false, null, DiagnosticLevelDeliveryState.NotReachable, "Target public URL is unresolved.");
 
         string? credential = await ResolveCredentialAsync(target, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(credential))
-            return new(false, null, LevelXDeliveryState.Rejected, "Target machine credential is unavailable.");
+            return new(false, null, DiagnosticLevelDeliveryState.Rejected, "Target machine credential is unavailable.");
 
         Guid requestId = Guid.NewGuid();
         Guid correlationId = Guid.NewGuid();
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        Uri callbackUri = new(callbackBaseUri, "/api/engineering/diagnostics/levelx/callback");
-        LevelXRunRequest request = new(
+        Uri callbackUri = new(callbackBaseUri, "/api/engineering/diagnostics/diagnostic-level/callback");
+        DiagnosticLevelRunRequest request = new(
             requestId,
             correlationId,
             level,
@@ -75,7 +75,7 @@ public sealed class RemoteLevelXCoordinator(
         byte[] body = JsonSerializer.SerializeToUtf8Bytes(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         string timestamp = now.ToString("O");
         string nonce = Guid.NewGuid().ToString("N");
-        string signature = LevelXRequestSigning.CreateRunRequestSignature(
+        string signature = DiagnosticLevelRequestSigning.CreateRunRequestSignature(
             credential,
             runUri.AbsolutePath,
             timestamp,
@@ -97,13 +97,13 @@ public sealed class RemoteLevelXCoordinator(
             HttpClient client = httpClientFactory.CreateClient("diagnostics-targets");
             using HttpResponseMessage response = await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
-                return new(false, null, LevelXDeliveryState.Rejected, "Target already has an active diagnostic run.");
+                return new(false, null, DiagnosticLevelDeliveryState.Rejected, "Target already has an active diagnostic run.");
             if (!response.IsSuccessStatusCode)
-                return new(false, null, LevelXDeliveryState.Rejected, $"Target rejected the request with HTTP {(int)response.StatusCode}.");
+                return new(false, null, DiagnosticLevelDeliveryState.Rejected, $"Target rejected the request with HTTP {(int)response.StatusCode}.");
 
-            LevelXRunAccepted? accepted = await response.Content.ReadFromJsonAsync<LevelXRunAccepted>(cancellationToken: cancellationToken).ConfigureAwait(false);
+            DiagnosticLevelRunAccepted? accepted = await response.Content.ReadFromJsonAsync<DiagnosticLevelRunAccepted>(cancellationToken: cancellationToken).ConfigureAwait(false);
             if (accepted is null)
-                return new(false, null, LevelXDeliveryState.Rejected, "Target acknowledgement was unreadable.");
+                return new(false, null, DiagnosticLevelDeliveryState.Rejected, "Target acknowledgement was unreadable.");
 
             pending[accepted.RunId] = new(
                 accepted.RunId,
@@ -114,24 +114,24 @@ public sealed class RemoteLevelXCoordinator(
                 level,
                 accepted.AcceptedAtUtc,
                 accepted.AcceptedAtUtc,
-                LevelXExecutionState.Accepted,
+                DiagnosticLevelExecutionState.Accepted,
                 target.SecretName);
 
-            return new(true, accepted, LevelXDeliveryState.Accepted);
+            return new(true, accepted, DiagnosticLevelDeliveryState.Accepted);
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new(false, null, LevelXDeliveryState.NotReachable, "Target did not acknowledge before timeout.");
+            return new(false, null, DiagnosticLevelDeliveryState.NotReachable, "Target did not acknowledge before timeout.");
         }
         catch (HttpRequestException ex)
         {
-            logger.LogWarning(ex, "LevelX target unreachable. Application={ApplicationId} Instance={InstanceId}", target.ApplicationId, target.InstanceId);
-            return new(false, null, LevelXDeliveryState.NotReachable, "Target could not be reached. Request was not queued.");
+            logger.LogWarning(ex, "DiagnosticLevel target unreachable. Application={ApplicationId} Instance={InstanceId}", target.ApplicationId, target.InstanceId);
+            return new(false, null, DiagnosticLevelDeliveryState.NotReachable, "Target could not be reached. Request was not queued.");
         }
     }
 
     public async Task<(bool Accepted, bool Duplicate, string? Error)> AuthenticateAndAcceptCallbackAsync(
-        LevelXCompletionCallback callback,
+        DiagnosticLevelCompletionCallback callback,
         string applicationId,
         string? instanceId,
         string path,
@@ -172,7 +172,7 @@ public sealed class RemoteLevelXCoordinator(
             return (false, duplicate, "Callback credential is unavailable.");
 
         if (string.IsNullOrWhiteSpace(signature) ||
-            !LevelXRequestSigning.VerifyCompletionCallback(
+            !DiagnosticLevelRequestSigning.VerifyCompletionCallback(
                 credential,
                 path,
                 timestamp,
@@ -197,7 +197,7 @@ public sealed class RemoteLevelXCoordinator(
         foreach ((Guid key, PendingRemoteRun value) in pending)
         {
             if (value.LastUpdatedAtUtc >= cutoff) continue;
-            pending[key] = value with { State = LevelXExecutionState.Unknown, LastUpdatedAtUtc = DateTimeOffset.UtcNow };
+            pending[key] = value with { State = DiagnosticLevelExecutionState.Unknown, LastUpdatedAtUtc = DateTimeOffset.UtcNow };
         }
     }
 
@@ -242,6 +242,6 @@ public sealed class RemoteLevelXCoordinator(
         EngineeringDiagnosticLevel Level,
         DateTimeOffset AcceptedAtUtc,
         DateTimeOffset LastUpdatedAtUtc,
-        LevelXExecutionState State,
+        DiagnosticLevelExecutionState State,
         string? SecretName);
 }

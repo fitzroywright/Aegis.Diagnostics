@@ -36,13 +36,13 @@ builder.Services.AddDiagnosticsMessaging(builder.Configuration);
 builder.Services.AddSingleton<CommonComponentDiagnosticCatalog>();
 builder.Services.AddSingleton<CommonIsolatedCertificationCatalog>();
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
-builder.Services.AddSingleton<LevelXStateExplainService>();
-builder.Services.AddSingleton<ILevelXStateExplainService>(services => services.GetRequiredService<LevelXStateExplainService>());
+builder.Services.AddSingleton<DiagnosticLevelStateExplainService>();
+builder.Services.AddSingleton<IDiagnosticLevelStateExplainService>(services => services.GetRequiredService<DiagnosticLevelStateExplainService>());
 builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();
 builder.Services.AddSingleton<IncidentCorrelationService>();
 builder.Services.AddSingleton<IIncidentNotificationPublisher, CommonMessagingIncidentNotificationPublisher>();
 builder.Services.AddSingleton<DiagnosticOrchestrationService>();
-builder.Services.AddSingleton<RemoteLevelXCoordinator>();
+builder.Services.AddSingleton<RemoteDiagnosticLevelCoordinator>();
 builder.Services.AddSuiteSecurity();
 
 WebApplication app = builder.Build();

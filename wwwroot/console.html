@@ -301,10 +301,14 @@ async function run(level){
  if(level<=2&&!reason.value.trim()){alert('LEVELS 2 AND 1 REQUIRE AN ENGINEERING REASON.');return;}
  if(level<=2&&!confirm('LEVEL '+level+' MAY EXECUTE DISRUPTIVE FAILURE/RECOVERY DIAGNOSTICS AGAINST ISOLATED DIAGNOSTIC TARGETS. CONTINUE?'))return;
  const payload=selectedTargetRequest(level);payload.reason=reason.value.trim()||null;payload.acknowledgeDisruption=level<=2;
- const r=await fetch(api+'/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ const remote=Number(targetType.value)===3;
+ const endpoint=remote?api+'/diagnostic-level/remote-run':api+'/run';
+ const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  if(r.status===401){location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);return;}
  if(r.status===403){alert('YOUR ACCOUNT DOES NOT HAVE PERMISSION FOR THIS DIAGNOSTIC LEVEL.');return;}
- if(!r.ok){alert(await r.text());return;}await load();
+ if(!r.ok){alert(await r.text());return;}
+ if(remote){await Promise.all([loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);return;}
+ await load();
 }
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>run(Number(b.dataset.level)));
 (async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([loadDiagnosticLevelTargets(),loadCatalogue(),load(),loadV2(),loadEngineerNotes(),loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);}catch{location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);}})();

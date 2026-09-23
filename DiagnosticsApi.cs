@@ -232,7 +232,6 @@ internal static class DiagnosticsApi
                     }
                 }
             }
-                };
             });
         });
 

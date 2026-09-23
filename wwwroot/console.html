@@ -526,6 +526,10 @@ function hxQuery(){
 }
 async function loadDiagnosticLevelLive(){
  const el=document.getElementById('diagnostic-levelLive');
+ const openDetails=new Set(
+  [...el.querySelectorAll('details[open][data-run-id]')]
+   .map(x=>x.dataset.runId)
+   .filter(Boolean));
  try{
   const r=await fetch(api+'/diagnostic-level/live',{cache:'no-store'});
   if(!r.ok)throw new Error('HTTP '+r.status);
@@ -619,6 +623,10 @@ async function loadDiagnosticLevelLive(){
 }
 async function loadDiagnosticLevelHistory(){
  const el=document.getElementById('diagnostic-levelHistory'),summary=document.getElementById('hxSummary'),resultFilter=document.getElementById('hxResult').value;
+ const openHistoryRuns=new Set(
+  [...el.querySelectorAll('details[open][data-run-id]')]
+   .map(x=>x.dataset.runId)
+   .filter(Boolean));
  el.innerHTML='<div class="run muted">Loading DiagnosticLevel history…</div>';
  try{
   const r=await fetch(api+'/diagnostic-level/history?'+hxQuery().toString(),{cache:'no-store'});
@@ -629,7 +637,7 @@ async function loadDiagnosticLevelHistory(){
   el.innerHTML=list.length?list.map(x=>{
    const tests=x.tests||[],failed=tests.filter(t=>hxTestStatusName(t.status)==='Failed').length,warn=tests.filter(t=>['Warning','InterventionRequired'].includes(hxTestStatusName(t.status))).length;
    const state=hxStateName(x.executionState),delivery=hxDeliveryName(x.deliveryState),checked=hxSelected.has(x.runId)?' checked':'';
-   return '<article class="diagnostic-level-history-run"><header><input class="hx-select" type="checkbox" data-run-id="'+esc(x.runId)+'"'+checked+'><div><b>'+esc(x.application)+' · '+esc(x.component)+' · LEVEL '+esc(x.level)+'</b><div class="meta">'+esc(localDateTime(x.startedAtUtc||x.requestedAtUtc))+' · '+esc(x.host)+' · v'+esc(x.version?.version||'Unknown')+' · '+esc(state)+' · '+esc(delivery)+'</div><div class="meta">Run '+esc(x.runId)+' · Correlation '+esc(x.correlationId)+' · Requested by '+esc(x.requestedBy)+'</div></div><span class="'+(failed?'Failed':warn?'Warning':'Passed')+'">'+(failed?failed+' failed':warn?warn+' warning':'passed')+'</span></header><details><summary>Tests ('+tests.length+')</summary><div class="diagnostic-level-history-tests">'+tests.map(t=>{const s=hxTestStatusName(t.status);return '<div class="diagnostic-level-history-test '+esc(s)+'"><b>'+esc(t.testId)+' · '+esc(t.name)+'</b><div>'+esc(s)+' · Level '+esc(t.level)+' · '+esc(t.summary)+'</div>'+(t.evidence?'<small>Evidence: '+esc(t.evidence)+'</small>':'')+'</div>'}).join('')+'</div></details></article>';
+   return '<article class="diagnostic-level-history-run"><header><input class="hx-select" type="checkbox" data-run-id="'+esc(x.runId)+'"'+checked+'><div><b>'+esc(x.application)+' · '+esc(x.component)+' · LEVEL '+esc(x.level)+'</b><div class="meta">'+esc(localDateTime(x.startedAtUtc||x.requestedAtUtc))+' · '+esc(x.host)+' · v'+esc(x.version?.version||'Unknown')+' · '+esc(state)+' · '+esc(delivery)+'</div><div class="meta">Run '+esc(x.runId)+' · Correlation '+esc(x.correlationId)+' · Requested by '+esc(x.requestedBy)+'</div></div><span class="'+(failed?'Failed':warn?'Warning':'Passed')+'">'+(failed?failed+' failed':warn?warn+' warning':'passed')+'</span></header><details data-run-id="'+esc(x.runId)+'"'+(openHistoryRuns.has(x.runId)?' open':'')+'><summary>Tests ('+tests.length+')</summary><div class="diagnostic-level-history-tests">'+tests.map(t=>{const s=hxTestStatusName(t.status);return '<div class="diagnostic-level-history-test '+esc(s)+'"><b>'+esc(t.testId)+' · '+esc(t.name)+'</b><div>'+esc(s)+' · Level '+esc(t.level)+' · '+esc(t.summary)+'</div>'+(t.evidence?'<small>Evidence: '+esc(t.evidence)+'</small>':'')+'</div>'}).join('')+'</div></details></article>';
   }).join(''):'<div class="run muted">No DiagnosticLevel runs match these filters.</div>';
   document.querySelectorAll('.hx-select').forEach(box=>box.addEventListener('change',()=>{box.checked?hxSelected.add(box.dataset.runId):hxSelected.delete(box.dataset.runId);summary.textContent=list.length+' run(s) · '+(hxSelected.size?hxSelected.size+' selected':'none selected')}));
  }catch(e){el.innerHTML='<div class="notice">Unable to load DiagnosticLevel history · '+esc(e.message)+'</div>';summary.textContent='History unavailable';}
@@ -725,6 +733,13 @@ async function run(level){
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>run(Number(b.dataset.level)));
 (async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([loadDiagnosticLevelTargets(),loadCatalogue(),load(),loadV2(),loadEngineerNotes(),loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);}catch{location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);}})();
 setInterval(()=>{loadDiagnosticLevelLive();},500);
-setInterval(()=>{load();loadV2();loadEngineerNotes();loadDiagnosticLevelHistory();},3000);
+setInterval(()=>{
+ load();
+ loadV2();
+ loadEngineerNotes();
+ const historyTab=document.querySelector('.diagnostic-tab.active')?.dataset.tab;
+ const expanded=document.querySelector('#diagnostic-levelHistory details[open]');
+ if(historyTab==='history'&&!expanded)loadDiagnosticLevelHistory();
+},3000);
 </script>
 </body></html>

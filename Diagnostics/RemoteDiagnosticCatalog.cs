@@ -33,6 +33,7 @@ public sealed class RemoteDiagnosticCatalog
         var checks = new List<EngineeringDiagnosticCheckDefinition>();
 
         bool includeSelf =
+            diagnosticTarget is null ||
             targetSelection.Type == DiagnosticTargetType.ControlPlane ||
             (targetSelection.Type == DiagnosticTargetType.ControlPlaneComponent &&
              string.Equals(targetSelection.TargetId, ControlPlaneDiagnosticTargets.Diagnostics, StringComparison.OrdinalIgnoreCase));
@@ -46,7 +47,10 @@ public sealed class RemoteDiagnosticCatalog
                 ExecuteSelfHealthAsync));
         }
 
-        foreach (DiagnosticTargetOptions target in SelectTargets(targetSelection))
+        IEnumerable<DiagnosticTargetOptions> selectedTargets =
+            diagnosticTarget is null ? discovery.Targets : SelectTargets(targetSelection);
+
+        foreach (DiagnosticTargetOptions target in selectedTargets)
         {
             string identity = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
             string id = $"{identity}-level-{(int)requestedLevel}".ToLowerInvariant().Replace('.', '-');

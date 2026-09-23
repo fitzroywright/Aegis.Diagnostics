@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, Diagnostic_Levels ]
   pull_request:
 
 jobs:
@@ -16,6 +16,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: fitzroywright/Common.Diagnostics
+          ref: Diagnostic_Levels
           path: Common/Common.Diagnostics
 
       - name: Checkout Common.Messaging

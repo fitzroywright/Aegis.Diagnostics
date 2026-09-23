@@ -35,7 +35,7 @@
   <main class="detail-scroll"><div class="aegis-busy-overlay" id="aegisBusyOverlay" aria-hidden="true"><div class="aegis-sensor" role="status" aria-live="polite"><div class="aegis-sensor-ticks"></div><div class="aegis-sensor-ring r1"></div><div class="aegis-sensor-ring r2"></div><div class="aegis-sensor-ring r3"></div><div class="aegis-sensor-sweep"></div><div class="aegis-sensor-pulse"></div><i class="aegis-sensor-dot d1"></i><i class="aegis-sensor-dot d2"></i><i class="aegis-sensor-dot d3"></i><div class="aegis-sensor-core"><i></i><i></i><i></i><i></i></div><div class="aegis-sensor-copy"><b>Processing</b><span id="aegisBusyText">Analyzing system state</span></div></div></div></div>
     <section class="page-head"><div><p>Targeted LevelX diagnostics from Level 5 routine checks through Level 1 exhaustive certification</p><div id="accessSummary" class="muted">Checking permissions…</div></div></section>
     <section class="levelx-launcher">
-      <div class="levelx-field"><label for="targetType">Target Type</label><select id="targetType"><option value="1">Control Plane</option><option value="2">Control Plane Component</option><option value="3">Registered Application</option></select></div>
+      <div class="levelx-field"><label for="targetType">Target Type</label><select id="targetType"><option value="1">Control Plane</option><option value="2">Control Plane Component</option><option value="4">Common Component</option><option value="3">Registered Application</option></select></div>
       <div class="levelx-field"><label for="diagnosticTarget">Target</label><select id="diagnosticTarget"><option value="control-plane">Entire Control Plane</option></select></div>
       <button id="explainTarget" class="levelx-explain" type="button">Explain State</button>
     </section>
@@ -156,6 +156,7 @@ function renderTargetOptions(){
  const type=Number(targetType.value);let options=[];
  if(type===1)options=[{value:'control-plane',label:'Entire Control Plane'}];
  else if(type===2)options=(levelxTargets.controlPlane||[]).filter(x=>x.targetId!=='control-plane').map(x=>({value:x.targetId,label:x.label}));
+ else if(type===4)options=(levelxTargets.commonComponents||[]).map(x=>({value:x.targetId,label:x.label}));
  else options=(levelxTargets.applications||[]).map(x=>({value:(x.applicationId||'')+'|'+(x.instanceId||''),label:(x.name||x.applicationId)+' / '+(x.instanceId||'Default')}));
  diagnosticTarget.innerHTML=options.map(x=>'<option value="'+esc(x.value)+'">'+esc(x.label)+'</option>').join('')||'<option value="">No targets available</option>';
  document.getElementById('explainTarget').disabled=type!==3||!diagnosticTarget.value;
@@ -166,6 +167,7 @@ function selectedTargetRequest(level){
  const type=Number(targetType.value),value=diagnosticTarget.value;
  if(type===1)return {level,targetType:1,targetId:'control-plane'};
  if(type===2)return {level,targetType:2,targetId:value};
+ if(type===4)return {level,targetType:4,targetId:value};
  const parts=value.split('|');return {level,targetType:3,targetId:(parts[0]||'')+'/'+(parts[1]||''),applicationId:parts[0]||null,instanceId:parts[1]||null};
 }
 async function explainSelectedTarget(){

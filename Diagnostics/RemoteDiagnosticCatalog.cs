@@ -11,7 +11,7 @@ public sealed class RemoteDiagnosticCatalog
     private readonly DiagnosticsOptions options;
     private readonly IDiagnosticTargetCatalog discovery;
     private readonly IConfiguration configuration;
-    private readonly ILevelXStateExplainService stateExplain;
+    private readonly IDiagnosticLevelStateExplainService stateExplain;
     private readonly CommonComponentDiagnosticCatalog commonComponents;
     private readonly CommonIsolatedCertificationCatalog isolatedCertifications;
 
@@ -20,7 +20,7 @@ public sealed class RemoteDiagnosticCatalog
         DiagnosticsOptions options,
         IDiagnosticTargetCatalog discovery,
         IConfiguration configuration,
-        ILevelXStateExplainService stateExplain,
+        IDiagnosticLevelStateExplainService stateExplain,
         CommonComponentDiagnosticCatalog commonComponents,
         CommonIsolatedCertificationCatalog isolatedCertifications)
     {
@@ -203,7 +203,7 @@ public sealed class RemoteDiagnosticCatalog
                 continue;
             }
 
-            LevelXStateExplanation? explanation =
+            DiagnosticLevelStateExplanation? explanation =
                 await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, cancellationToken)
                     .ConfigureAwait(false);
 
@@ -222,10 +222,10 @@ public sealed class RemoteDiagnosticCatalog
                 failures.Add($"{applicationId} cannot confirm Configuration registration authority availability.");
 
             if (explanation.Codes.Contains(
-                    LevelXDiagnosticCodes.StateDerivationMismatch,
+                    DiagnosticLevelDiagnosticCodes.StateDerivationMismatch,
                     StringComparer.OrdinalIgnoreCase) ||
                 explanation.Codes.Contains(
-                    LevelXDiagnosticCodes.ControlPlaneStateDivergence,
+                    DiagnosticLevelDiagnosticCodes.ControlPlaneStateDivergence,
                     StringComparer.OrdinalIgnoreCase))
             {
                 failures.Add($"{applicationId} has inconsistent authoritative/runtime state.");
@@ -248,7 +248,7 @@ public sealed class RemoteDiagnosticCatalog
                 string.Join(" ", failures.Concat(warnings)) + (evidenceText.Length == 0 ? string.Empty : " " + evidenceText),
                 Expected: "Diagnostics must discover Configuration state, read Operations merged state, and agree on current Control Plane authority/runtime state.",
                 Actual: string.Join(" | ", failures.Concat(warnings)),
-                Code: LevelXDiagnosticCodes.ControlPlaneStateDivergence);
+                Code: DiagnosticLevelDiagnosticCodes.ControlPlaneStateDivergence);
         }
 
         if (warnings.Count > 0)
@@ -278,7 +278,7 @@ public sealed class RemoteDiagnosticCatalog
         DiagnosticTargetOptions target,
         CancellationToken cancellationToken)
     {
-        LevelXStateExplanation? explanation =
+        DiagnosticLevelStateExplanation? explanation =
             await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -292,7 +292,7 @@ public sealed class RemoteDiagnosticCatalog
                 target.ApplicationId,
                 Expected: "Authoritative registration and Operations effective state are both observable.",
                 Actual: "No merged application state was returned.",
-                Code: LevelXDiagnosticCodes.ControlPlaneStateDivergence);
+                Code: DiagnosticLevelDiagnosticCodes.ControlPlaneStateDivergence);
         }
 
         EngineeringDiagnosticStatus status = explanation.Result switch

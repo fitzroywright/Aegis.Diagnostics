@@ -17,9 +17,11 @@ public sealed record RemoteLevelXDispatchResult(
 public sealed class RemoteLevelXCoordinator(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
+    LevelXNonceCache nonceCache,
     ILogger<RemoteLevelXCoordinator> logger)
 {
     private readonly ConcurrentDictionary<Guid, PendingRemoteRun> pending = new();
+    private readonly ConcurrentDictionary<Guid, PendingRemoteRun> completed = new();
 
     public IReadOnlyList<object> Pending => pending.Values
         .OrderByDescending(x => x.AcceptedAtUtc)
@@ -112,7 +114,8 @@ public sealed class RemoteLevelXCoordinator(
                 level,
                 accepted.AcceptedAtUtc,
                 accepted.AcceptedAtUtc,
-                LevelXExecutionState.Accepted);
+                LevelXExecutionState.Accepted,
+                target.SecretName);
 
             return new(true, accepted, LevelXDeliveryState.Accepted);
         }
@@ -127,23 +130,65 @@ public sealed class RemoteLevelXCoordinator(
         }
     }
 
-    public bool AcceptCallback(LevelXCompletionCallback callback, out string? error)
+    public async Task<(bool Accepted, bool Duplicate, string? Error)> AuthenticateAndAcceptCallbackAsync(
+        LevelXCompletionCallback callback,
+        string applicationId,
+        string? instanceId,
+        string path,
+        string timestamp,
+        string nonce,
+        string signature,
+        CancellationToken cancellationToken)
     {
-        if (!pending.TryGetValue(callback.RunId, out PendingRemoteRun? expected))
+        PendingRemoteRun? expected = null;
+        bool duplicate = false;
+
+        if (!pending.TryGetValue(callback.RunId, out expected))
         {
-            error = "Unknown RunId.";
-            return false;
+            if (!completed.TryGetValue(callback.RunId, out expected))
+                return (false, false, "Unknown RunId.");
+            duplicate = true;
         }
 
-        if (callback.RequestId != expected.RequestId || callback.CorrelationId != expected.CorrelationId)
+        if (callback.RequestId != expected.RequestId ||
+            callback.CorrelationId != expected.CorrelationId)
+            return (false, duplicate, "Run, request and correlation identifiers do not match the accepted request.");
+
+        if (!string.Equals(applicationId, expected.ApplicationId, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrWhiteSpace(expected.InstanceId) &&
+             !string.Equals(instanceId, expected.InstanceId, StringComparison.OrdinalIgnoreCase)))
+            return (false, duplicate, "Callback application identity does not match the accepted target.");
+
+        if (!DateTimeOffset.TryParse(timestamp, out DateTimeOffset signedAt) ||
+            Math.Abs((DateTimeOffset.UtcNow - signedAt).TotalMinutes) > 2)
+            return (false, duplicate, "Callback signature timestamp is invalid or stale.");
+
+        if (!nonceCache.TryUse(nonce, DateTimeOffset.UtcNow))
+            return (false, duplicate, "Callback nonce was already used.");
+
+        string? credential = await ResolveCredentialAsync(expected.SecretName, cancellationToken)
+            .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(credential))
+            return (false, duplicate, "Callback credential is unavailable.");
+
+        if (string.IsNullOrWhiteSpace(signature) ||
+            !LevelXRequestSigning.VerifyCompletionCallback(
+                credential,
+                path,
+                timestamp,
+                nonce,
+                callback,
+                signature))
+            return (false, duplicate, "Callback signature is invalid.");
+
+        if (!duplicate)
         {
-            error = "Run, request and correlation identifiers do not match the accepted request.";
-            return false;
+            pending.TryRemove(callback.RunId, out PendingRemoteRun? removed);
+            completed[callback.RunId] = removed ?? expected;
+            TrimCompleted();
         }
 
-        pending.TryRemove(callback.RunId, out _);
-        error = null;
-        return true;
+        return (true, duplicate, null);
     }
 
     public void MarkUnknownAfter(TimeSpan staleAfter)
@@ -156,17 +201,35 @@ public sealed class RemoteLevelXCoordinator(
         }
     }
 
-    private async Task<string?> ResolveCredentialAsync(DiagnosticTargetOptions target, CancellationToken cancellationToken)
+    private Task<string?> ResolveCredentialAsync(
+        DiagnosticTargetOptions target,
+        CancellationToken cancellationToken) =>
+        ResolveCredentialAsync(target.SecretName, cancellationToken);
+
+    private async Task<string?> ResolveCredentialAsync(
+        string? secretName,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(target.SecretName)) return null;
+        if (string.IsNullOrWhiteSpace(secretName)) return null;
         try
         {
             ISecretProvider secrets = CommonSecretProviderFactory.Create(configuration);
-            return await secrets.GetAsync(target.SecretName, cancellationToken).ConfigureAwait(false);
+            return await secrets.GetAsync(secretName, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             return null;
+        }
+    }
+
+    private void TrimCompleted()
+    {
+        if (completed.Count <= 512) return;
+        foreach (PendingRemoteRun old in completed.Values
+                     .OrderBy(x => x.LastUpdatedAtUtc)
+                     .Take(completed.Count - 512))
+        {
+            completed.TryRemove(old.RunId, out _);
         }
     }
 
@@ -179,5 +242,6 @@ public sealed class RemoteLevelXCoordinator(
         EngineeringDiagnosticLevel Level,
         DateTimeOffset AcceptedAtUtc,
         DateTimeOffset LastUpdatedAtUtc,
-        LevelXExecutionState State);
+        LevelXExecutionState State,
+        string? SecretName);
 }

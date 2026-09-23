@@ -42,6 +42,7 @@ builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();
 builder.Services.AddSingleton<IncidentCorrelationService>();
 builder.Services.AddSingleton<IIncidentNotificationPublisher, CommonMessagingIncidentNotificationPublisher>();
 builder.Services.AddSingleton<DiagnosticOrchestrationService>();
+builder.Services.AddSingleton<RemoteLevelXCoordinator>();
 builder.Services.AddSuiteSecurity();
 
 WebApplication app = builder.Build();

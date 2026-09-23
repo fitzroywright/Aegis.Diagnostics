@@ -11,7 +11,7 @@ public sealed class CommonComponentDiagnosticCatalogTests
     [Fact]
     public void Catalogue_has_unique_stable_test_ids()
     {
-        LevelXCatalogueEntry[] entries = AllEntries();
+        DiagnosticLevelCatalogueEntry[] entries = AllEntries();
         string[] ids = entries.Select(x => x.TestId).ToArray();
 
         Assert.Equal(85, ids.Length);
@@ -21,7 +21,7 @@ public sealed class CommonComponentDiagnosticCatalogTests
     [Fact]
     public void Level5_and_Level4_tests_are_non_destructive()
     {
-        LevelXCatalogueEntry[] unsafeEntries = AllEntries()
+        DiagnosticLevelCatalogueEntry[] unsafeEntries = AllEntries()
             .Where(x => x.IntroducedAtLevel is EngineeringDiagnosticLevel.Level5Scan or EngineeringDiagnosticLevel.Level4Analysis)
             .Where(x => x.Destructive)
             .ToArray();
@@ -50,13 +50,13 @@ public sealed class CommonComponentDiagnosticCatalogTests
     [InlineData("Common.Storage")]
     public void Every_common_component_has_multiple_tests_at_every_level(string component)
     {
-        LevelXCatalogueEntry[] entries = AllEntries().Where(x => x.Component.Equals(component, StringComparison.OrdinalIgnoreCase)).ToArray();
+        DiagnosticLevelCatalogueEntry[] entries = AllEntries().Where(x => x.Component.Equals(component, StringComparison.OrdinalIgnoreCase)).ToArray();
 
         foreach (EngineeringDiagnosticLevel level in EngineeringDiagnosticLevelSemantics.StarfleetOrder)
             Assert.True(entries.Count(x => x.IntroducedAtLevel == level) >= 2, $"{component} needs at least two discrete tests introduced at Level {(int)level}.");
     }
 
-    private static LevelXCatalogueEntry[] AllEntries()
+    private static DiagnosticLevelCatalogueEntry[] AllEntries()
         => Create().Catalogue.Concat(new CommonIsolatedCertificationCatalog().Catalogue).ToArray();
 
     private static CommonComponentDiagnosticCatalog Create()
@@ -83,9 +83,9 @@ public sealed class CommonComponentDiagnosticCatalogTests
         public bool IsStale => false;
     }
 
-    private sealed class EmptyExplainService : ILevelXStateExplainService
+    private sealed class EmptyExplainService : IDiagnosticLevelStateExplainService
     {
-        public Task<LevelXStateExplanation?> ExplainAsync(string applicationId, string? instanceId, CancellationToken cancellationToken = default)
-            => Task.FromResult<LevelXStateExplanation?>(null);
+        public Task<DiagnosticLevelStateExplanation?> ExplainAsync(string applicationId, string? instanceId, CancellationToken cancellationToken = default)
+            => Task.FromResult<DiagnosticLevelStateExplanation?>(null);
     }
 }

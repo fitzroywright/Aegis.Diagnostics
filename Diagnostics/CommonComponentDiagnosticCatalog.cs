@@ -12,7 +12,7 @@ using Common.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text;
 
-public sealed record LevelXCatalogueEntry(
+public sealed record DiagnosticLevelCatalogueEntry(
     string TestId,
     string Component,
     string Name,
@@ -24,19 +24,19 @@ public sealed class CommonComponentDiagnosticCatalog(
     IServiceProvider services,
     IConfiguration configuration,
     IDiagnosticTargetCatalog discovery,
-    ILevelXStateExplainService stateExplain,
+    IDiagnosticLevelStateExplainService stateExplain,
     ILogger<CommonComponentDiagnosticCatalog> logger)
 {
-    private readonly IReadOnlyList<LevelXCatalogueEntry> catalogue =
+    private readonly IReadOnlyList<DiagnosticLevelCatalogueEntry> catalogue =
     [
         // Common.Diagnostics
-        new("DIA-001", CommonDiagnosticTargets.Diagnostics, "Engineering engine registered", EngineeringDiagnosticLevel.Level5Scan, false, "Verify the LevelX engine is available in dependency injection."),
+        new("DIA-001", CommonDiagnosticTargets.Diagnostics, "Engineering engine registered", EngineeringDiagnosticLevel.Level5Scan, false, "Verify the DiagnosticLevel engine is available in dependency injection."),
         new("DIA-002", CommonDiagnosticTargets.Diagnostics, "Run store registered", EngineeringDiagnosticLevel.Level5Scan, false, "Verify persistent diagnostic run storage is registered."),
         new("DIA-003", CommonDiagnosticTargets.Diagnostics, "Discovery freshness", EngineeringDiagnosticLevel.Level5Scan, false, "Verify Configuration-backed discovery has completed and is not stale."),
         new("DIA-004", CommonDiagnosticTargets.Diagnostics, "Target inventory available", EngineeringDiagnosticLevel.Level5Scan, false, "Verify at least one registered diagnostic target is discoverable."),
         new("DIA-005", CommonDiagnosticTargets.Diagnostics, "Starfleet level ordering", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify Level 5 through Level 1 ordering and depth semantics."),
         new("DIA-006", CommonDiagnosticTargets.Diagnostics, "UTC clock semantics", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify diagnostics freshness arithmetic is based on UTC DateTimeOffset."),
-        new("DIA-007", CommonDiagnosticTargets.Diagnostics, "Diagnostic codes unique", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify LevelX diagnostic code identifiers do not collide."),
+        new("DIA-007", CommonDiagnosticTargets.Diagnostics, "Diagnostic codes unique", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify DiagnosticLevel diagnostic code identifiers do not collide."),
         new("DIA-008", CommonDiagnosticTargets.Diagnostics, "Common target registry unique", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify Common component target identifiers are unique."),
 
         // Common.Registration
@@ -91,11 +91,11 @@ public sealed class CommonComponentDiagnosticCatalog(
         new("STO-006", CommonDiagnosticTargets.Storage, "Path traversal rejection", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify unsafe storage keys are rejected without writing outside the temporary sandbox.")
     ];
 
-    public IReadOnlyList<LevelXCatalogueEntry> Catalogue => catalogue;
+    public IReadOnlyList<DiagnosticLevelCatalogueEntry> Catalogue => catalogue;
 
     public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(DiagnosticTarget target)
     {
-        IEnumerable<LevelXCatalogueEntry> selected = target.Type switch
+        IEnumerable<DiagnosticLevelCatalogueEntry> selected = target.Type switch
         {
             DiagnosticTargetType.ControlPlane => catalogue,
             DiagnosticTargetType.CommonComponent => catalogue.Where(x => string.Equals(x.Component, target.TargetId, StringComparison.OrdinalIgnoreCase)),
@@ -105,10 +105,10 @@ public sealed class CommonComponentDiagnosticCatalog(
         return selected.Select(ToDefinition).ToArray();
     }
 
-    private EngineeringDiagnosticCheckDefinition ToDefinition(LevelXCatalogueEntry item) =>
+    private EngineeringDiagnosticCheckDefinition ToDefinition(DiagnosticLevelCatalogueEntry item) =>
         new(item.TestId, $"{item.TestId} — {item.Name}", item.IntroducedAtLevel, ct => RunAsync(item, ct));
 
-    private async Task<EngineeringDiagnosticCheckResult> RunAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> RunAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         return item.TestId switch
         {
@@ -118,7 +118,7 @@ public sealed class CommonComponentDiagnosticCatalog(
             "DIA-004" => discovery.Targets.Count > 0 ? Pass(item, "Diagnostic target inventory is populated.", "> 0 target", discovery.Targets.Count.ToString()) : Warn(item, "No registered diagnostic targets are currently discoverable.", "> 0 target", "0"),
             "DIA-005" => StarfleetOrder(item),
             "DIA-006" => DateTimeOffset.UtcNow.Offset == TimeSpan.Zero ? Pass(item, "UTC clock semantics are correct.", "UTC offset 00:00", DateTimeOffset.UtcNow.Offset.ToString()) : Fail(item, "UTC clock semantics are inconsistent.", "UTC offset 00:00", DateTimeOffset.UtcNow.Offset.ToString()),
-            "DIA-007" => UniqueStrings(item, [LevelXDiagnosticCodes.StateDerivationMismatch, LevelXDiagnosticCodes.StaleTelemetry, LevelXDiagnosticCodes.StaleAuthority, LevelXDiagnosticCodes.HealthMismatch, LevelXDiagnosticCodes.AuthorityUnavailable, LevelXDiagnosticCodes.ControlPlaneStateDivergence]),
+            "DIA-007" => UniqueStrings(item, [DiagnosticLevelDiagnosticCodes.StateDerivationMismatch, DiagnosticLevelDiagnosticCodes.StaleTelemetry, DiagnosticLevelDiagnosticCodes.StaleAuthority, DiagnosticLevelDiagnosticCodes.HealthMismatch, DiagnosticLevelDiagnosticCodes.AuthorityUnavailable, DiagnosticLevelDiagnosticCodes.ControlPlaneStateDivergence]),
             "DIA-008" => UniqueStrings(item, CommonDiagnosticTargets.Components),
 
             "REG-001" => EndpointResolves(item, AegisControlPlaneService.Configuration, false),
@@ -166,16 +166,16 @@ public sealed class CommonComponentDiagnosticCatalog(
             "STO-004" => await StorageRoundTripAsync(item, ct, verifyMetadata: false),
             "STO-005" => await StorageRoundTripAsync(item, ct, verifyMetadata: true),
             "STO-006" => await StorageTraversalAsync(item, ct),
-            _ => Fail(item, "Unknown LevelX catalogue test.", "Known test ID", item.TestId)
+            _ => Fail(item, "Unknown DiagnosticLevel catalogue test.", "Known test ID", item.TestId)
         };
     }
 
-    private EngineeringDiagnosticCheckResult ServiceRegistered<T>(LevelXCatalogueEntry item) where T : class =>
+    private EngineeringDiagnosticCheckResult ServiceRegistered<T>(DiagnosticLevelCatalogueEntry item) where T : class =>
         services.GetService<T>() is not null
             ? Pass(item, $"{typeof(T).Name} is registered.", "Registered", "Registered")
             : Fail(item, $"{typeof(T).Name} is not registered.", "Registered", "Missing");
 
-    private EngineeringDiagnosticCheckResult DiscoveryFresh(LevelXCatalogueEntry item)
+    private EngineeringDiagnosticCheckResult DiscoveryFresh(DiagnosticLevelCatalogueEntry item)
     {
         if (!discovery.LastSuccessfulRefreshUtc.HasValue)
             return Fail(item, discovery.LastError ?? "Discovery has never completed successfully.", "Successful current discovery", "Never completed");
@@ -184,7 +184,7 @@ public sealed class CommonComponentDiagnosticCatalog(
             : Pass(item, "Configuration discovery is current.", "Current discovery", $"Last success {discovery.LastSuccessfulRefreshUtc:O}");
     }
 
-    private static EngineeringDiagnosticCheckResult StarfleetOrder(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult StarfleetOrder(DiagnosticLevelCatalogueEntry item)
     {
         int[] actual = EngineeringDiagnosticLevelSemantics.StarfleetOrder.Select(x => (int)x).ToArray();
         return actual.SequenceEqual([5,4,3,2,1])
@@ -192,7 +192,7 @@ public sealed class CommonComponentDiagnosticCatalog(
             : Fail(item, "Starfleet level ordering is incorrect.", "5,4,3,2,1", string.Join(',', actual));
     }
 
-    private static EngineeringDiagnosticCheckResult UniqueStrings(LevelXCatalogueEntry item, IEnumerable<string> values)
+    private static EngineeringDiagnosticCheckResult UniqueStrings(DiagnosticLevelCatalogueEntry item, IEnumerable<string> values)
     {
         string[] all = values.ToArray();
         int unique = all.Distinct(StringComparer.OrdinalIgnoreCase).Count();
@@ -201,7 +201,7 @@ public sealed class CommonComponentDiagnosticCatalog(
             : Fail(item, "Duplicate identifiers detected.", $"{all.Length} unique", $"{unique} unique");
     }
 
-    private EngineeringDiagnosticCheckResult EndpointResolves(LevelXCatalogueEntry item, AegisControlPlaneService service, bool requireHttps)
+    private EngineeringDiagnosticCheckResult EndpointResolves(DiagnosticLevelCatalogueEntry item, AegisControlPlaneService service, bool requireHttps)
     {
         try
         {
@@ -214,31 +214,31 @@ public sealed class CommonComponentDiagnosticCatalog(
         catch (Exception ex) { return Fail(item, $"{service} endpoint resolution failed.", "Resolvable endpoint", ex.GetType().Name); }
     }
 
-    private EngineeringDiagnosticCheckResult RegistrationIdentityCompleteness(LevelXCatalogueEntry item)
+    private EngineeringDiagnosticCheckResult RegistrationIdentityCompleteness(DiagnosticLevelCatalogueEntry item)
     {
         int invalid = discovery.Targets.Count(x => string.IsNullOrWhiteSpace(x.ApplicationId) || string.IsNullOrWhiteSpace(x.InstanceId));
         return invalid == 0 ? Pass(item, "All discovered registration identities are complete.", "0 incomplete", "0") : Fail(item, "Incomplete registration identities were discovered.", "0 incomplete", invalid.ToString());
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> ReferenceRegistrationExplainableAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> ReferenceRegistrationExplainableAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         DiagnosticTargetOptions? target = discovery.Targets.FirstOrDefault(x => x.ApplicationId.Equals("Aegis.Hello", StringComparison.OrdinalIgnoreCase)) ?? discovery.Targets.FirstOrDefault();
         if (target is null) return Warn(item, "No registered application is available for state explanation.", "At least one target", "None");
         try
         {
-            LevelXStateExplanation? explanation = await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, ct);
+            DiagnosticLevelStateExplanation? explanation = await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, ct);
             return explanation is null ? Fail(item, "Reference registration could not be found in authoritative inventory.", "Explainable registration", "Not found") : Pass(item, "Reference registration is explainable.", "Authoritative explanation", $"{explanation.RegistrationState}; {explanation.EffectiveState}");
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { return Fail(item, "Reference registration explanation failed.", "Authoritative explanation", ex.GetType().Name); }
     }
 
-    private EngineeringDiagnosticCheckResult RegistrationIdentityUniqueness(LevelXCatalogueEntry item)
+    private EngineeringDiagnosticCheckResult RegistrationIdentityUniqueness(DiagnosticLevelCatalogueEntry item)
     {
         string[] ids = discovery.Targets.Select(x => $"{x.ApplicationId}\u001f{x.InstanceId}").ToArray();
         return ids.Distinct(StringComparer.OrdinalIgnoreCase).Count() == ids.Length ? Pass(item, "Registration identities are unique.", $"{ids.Length} unique", $"{ids.Length} unique") : Fail(item, "Duplicate ApplicationId/InstanceId identities were discovered.", $"{ids.Length} unique", $"{ids.Distinct(StringComparer.OrdinalIgnoreCase).Count()} unique");
     }
 
-    private EngineeringDiagnosticCheckResult PublicEndpointPolicy(LevelXCatalogueEntry item)
+    private EngineeringDiagnosticCheckResult PublicEndpointPolicy(DiagnosticLevelCatalogueEntry item)
     {
         string[] values =
         [
@@ -249,13 +249,13 @@ public sealed class CommonComponentDiagnosticCatalog(
         return invalid.Length == 0 ? Pass(item, "Public Control Plane endpoints use HTTPS.", "All HTTPS", string.Join(", ", values)) : Fail(item, "One or more public Control Plane endpoints are not HTTPS.", "All HTTPS", string.Join(", ", invalid));
     }
 
-    private EngineeringDiagnosticCheckResult PublishedUrlsValid(LevelXCatalogueEntry item)
+    private EngineeringDiagnosticCheckResult PublishedUrlsValid(DiagnosticLevelCatalogueEntry item)
     {
         string[] invalid = discovery.Targets.Where(x => !string.IsNullOrWhiteSpace(x.BaseUrl) && !Uri.TryCreate(x.BaseUrl, UriKind.Absolute, out _)).Select(x => x.ApplicationId).ToArray();
         return invalid.Length == 0 ? Pass(item, "Published diagnostic base URLs are valid.", "0 invalid", "0 invalid") : Fail(item, "Invalid published diagnostic base URLs detected.", "0 invalid", string.Join(", ", invalid));
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> RegistrationConsistencyAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> RegistrationConsistencyAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var failures = new List<string>();
         var warnings = new List<string>();
@@ -263,9 +263,9 @@ public sealed class CommonComponentDiagnosticCatalog(
         {
             try
             {
-                LevelXStateExplanation? x = await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, ct);
+                DiagnosticLevelStateExplanation? x = await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, ct);
                 if (x is null) { failures.Add($"{target.ApplicationId}/{target.InstanceId}: missing"); continue; }
-                if (x.Codes.Contains(LevelXDiagnosticCodes.StateDerivationMismatch, StringComparer.OrdinalIgnoreCase)) failures.Add($"{target.ApplicationId}/{target.InstanceId}: state mismatch");
+                if (x.Codes.Contains(DiagnosticLevelDiagnosticCodes.StateDerivationMismatch, StringComparer.OrdinalIgnoreCase)) failures.Add($"{target.ApplicationId}/{target.InstanceId}: state mismatch");
                 else if (!x.AuthorityAvailable || !x.RegistrationFresh) warnings.Add($"{target.ApplicationId}/{target.InstanceId}: authority/freshness warning");
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) { failures.Add($"{target.ApplicationId}/{target.InstanceId}: {ex.GetType().Name}"); }
@@ -275,27 +275,27 @@ public sealed class CommonComponentDiagnosticCatalog(
         return Pass(item, "Registration state is consistent across checked applications.", "0 failures/warnings", "0");
     }
 
-    private static EngineeringDiagnosticCheckResult CapabilityNames(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult CapabilityNames(DiagnosticLevelCatalogueEntry item)
     {
         string[] invalid = OperationalPermissions.All.Where(p => !p.Contains('.') || p.Contains("Manager", StringComparison.OrdinalIgnoreCase) || p.Contains("Administrator", StringComparison.OrdinalIgnoreCase)).ToArray();
         return invalid.Length == 0 ? Pass(item, "Operational permissions follow capability naming policy.", "0 invalid", "0") : Fail(item, "Invalid operational permission names detected.", "0 invalid", string.Join(", ", invalid));
     }
 
-    private static EngineeringDiagnosticCheckResult RequiredPermissions(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult RequiredPermissions(DiagnosticLevelCatalogueEntry item)
     {
         bool ok = OperationalPermissions.All.Contains(OperationalPermissions.DiagnosticsView) && OperationalPermissions.All.Contains(OperationalPermissions.DiagnosticsRun);
         return ok ? Pass(item, "Required Diagnostics permissions are present.", "Diagnostics.View and Diagnostics.Run", "Present") : Fail(item, "Required Diagnostics permissions are missing.", "Diagnostics.View and Diagnostics.Run", "Missing");
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> PermissionDenialAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> PermissionDenialAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var store = new ProbeAuthorizationStore();
         var authorizer = new PermissionAuthorizer(store);
-        AuthorizationDecision decision = await authorizer.AuthorizeAsync(new AuthorizationSubject("levelx-probe", []), OperationalPermissions.AlertsResolve, ct);
+        AuthorizationDecision decision = await authorizer.AuthorizeAsync(new AuthorizationSubject("diagnostic-level-probe", []), OperationalPermissions.AlertsResolve, ct);
         return !decision.Allowed ? Pass(item, "Ungrant permission is denied.", "Denied", "Denied") : Fail(item, "Ungrant permission was unexpectedly allowed.", "Denied", "Allowed");
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> SecretsConfiguredAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> SecretsConfiguredAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         ICommonSecretsHealthCheck? health = services.GetService<ICommonSecretsHealthCheck>();
         if (health is null) return Fail(item, "Secrets health service is unavailable.", "Registered", "Missing");
@@ -303,7 +303,7 @@ public sealed class CommonComponentDiagnosticCatalog(
         return result.IsConfigured ? Pass(item, "A secret provider is configured.", "Configured", result.ProviderName) : Fail(item, "No secret provider is configured.", "Configured", "Not configured");
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> SecretsReachableAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> SecretsReachableAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         ICommonSecretsHealthCheck? health = services.GetService<ICommonSecretsHealthCheck>();
         if (health is null) return Fail(item, "Secrets health service is unavailable.", "Reachable provider", "Health service missing");
@@ -311,7 +311,7 @@ public sealed class CommonComponentDiagnosticCatalog(
         return result.IsAvailable ? Pass(item, "Secret provider is reachable.", "Reachable", result.ProviderName) : Fail(item, result.Message, "Reachable", "Unavailable");
     }
 
-    private EngineeringDiagnosticCheckResult SecretsPolicy(LevelXCatalogueEntry item)
+    private EngineeringDiagnosticCheckResult SecretsPolicy(DiagnosticLevelCatalogueEntry item)
     {
         try
         {
@@ -323,7 +323,7 @@ public sealed class CommonComponentDiagnosticCatalog(
         catch (Exception ex) { return Fail(item, "Current CommonSecrets policy is invalid.", "Valid policy", ex.Message); }
     }
 
-    private EngineeringDiagnosticCheckResult SecretsProviderOrder(LevelXCatalogueEntry item)
+    private EngineeringDiagnosticCheckResult SecretsProviderOrder(DiagnosticLevelCatalogueEntry item)
     {
         try
         {
@@ -336,7 +336,7 @@ public sealed class CommonComponentDiagnosticCatalog(
         catch (Exception ex) { return Fail(item, "Provider order could not be resolved.", "Resolvable provider order", ex.Message); }
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> EnabledSecretProvidersHealthyAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> EnabledSecretProvidersHealthyAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         SecretProviderHealth[] results = await Task.WhenAll(services.GetServices<ISecretProviderHealth>().Select(x => x.CheckHealthAsync(ct)));
         SecretProviderHealth[] enabled = results.Where(x => x.IsEnabled).ToArray();
@@ -345,7 +345,7 @@ public sealed class CommonComponentDiagnosticCatalog(
         return unavailable.Length == 0 ? Pass(item, "All enabled secret providers are healthy.", "0 unavailable", "0") : Fail(item, "One or more enabled secret providers are unavailable.", "0 unavailable", string.Join(", ", unavailable.Select(x => x.ProviderName)));
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> SecretsV2HealthAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> SecretsV2HealthAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         ISecretProvider? provider = services.GetService<ISecretProvider>();
         ICommonSecretsHealthCheck? health = services.GetService<ICommonSecretsHealthCheck>();
@@ -357,14 +357,14 @@ public sealed class CommonComponentDiagnosticCatalog(
     private async Task<ExternalDeliveryQueueHealth?> QueueHealthAsync(CancellationToken ct) =>
         services.GetService<IExternalDeliveryQueueHealth>() is { } health ? await health.CheckHealthAsync(ct) : null;
 
-    private async Task<EngineeringDiagnosticCheckResult> MessagingQueueAvailableAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> MessagingQueueAvailableAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         ExternalDeliveryQueueHealth? h = await QueueHealthAsync(ct);
         if (h is null) return Fail(item, "Messaging queue health service is unavailable.", "Health service registered", "Missing");
         return h.IsAvailable ? Pass(item, "Messaging queue is available.", "Available", h.QueueName ?? "default") : Fail(item, h.Message, "Available", "Unavailable");
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> MessagingThresholdAsync(LevelXCatalogueEntry item, CancellationToken ct, string kind)
+    private async Task<EngineeringDiagnosticCheckResult> MessagingThresholdAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct, string kind)
     {
         ExternalDeliveryQueueHealth? h = await QueueHealthAsync(ct);
         ExternalDeliveryOptions? o = services.GetService<ExternalDeliveryOptions>();
@@ -379,7 +379,7 @@ public sealed class CommonComponentDiagnosticCatalog(
         };
     }
 
-    private EngineeringDiagnosticCheckResult MessagingThresholdOrdering(LevelXCatalogueEntry item)
+    private EngineeringDiagnosticCheckResult MessagingThresholdOrdering(DiagnosticLevelCatalogueEntry item)
     {
         ExternalDeliveryOptions? o = services.GetService<ExternalDeliveryOptions>();
         if (o is null) return Fail(item, "Messaging options are unavailable.", "Options registered", "Missing");
@@ -387,7 +387,7 @@ public sealed class CommonComponentDiagnosticCatalog(
         return ok ? Pass(item, "Messaging warning/critical thresholds are ordered correctly.", "warning <= critical", "Valid") : Fail(item, "Messaging threshold ordering is invalid.", "warning <= critical", "Invalid");
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> MessagingMetricInvariantsAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> MessagingMetricInvariantsAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         ExternalDeliveryQueueHealth? h = await QueueHealthAsync(ct);
         if (h is null) return Fail(item, "Messaging queue health is unavailable.", "Metrics available", "Missing");
@@ -395,9 +395,9 @@ public sealed class CommonComponentDiagnosticCatalog(
         return ok ? Pass(item, "Queue metric invariants are valid.", "All counts/ages >= 0", "Valid") : Fail(item, "Negative queue metric detected.", "All counts/ages >= 0", h.ToString());
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> StorageHealthProbeAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> StorageHealthProbeAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
-        string root = Path.Combine(Path.GetTempPath(), "aegis-levelx-storage-" + Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(Path.GetTempPath(), "aegis-diagnostic-level-storage-" + Guid.NewGuid().ToString("N"));
         try
         {
             var storage = new LocalFileStorage(root);
@@ -407,19 +407,19 @@ public sealed class CommonComponentDiagnosticCatalog(
         finally { TryDeleteDirectory(root); }
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> StorageRoundTripAsync(LevelXCatalogueEntry item, CancellationToken ct, bool verifyMetadata)
+    private async Task<EngineeringDiagnosticCheckResult> StorageRoundTripAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct, bool verifyMetadata)
     {
-        string root = Path.Combine(Path.GetTempPath(), "aegis-levelx-storage-" + Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(Path.GetTempPath(), "aegis-diagnostic-level-storage-" + Guid.NewGuid().ToString("N"));
         try
         {
             var storage = new LocalFileStorage(root);
-            byte[] bytes = Encoding.UTF8.GetBytes("levelx-ephemeral-probe");
+            byte[] bytes = Encoding.UTF8.GetBytes("diagnostic-level-ephemeral-probe");
             await using var input = new MemoryStream(bytes);
-            StoredFile stored = await storage.StoreAsync(new StorageWriteRequest("probe/test.txt", input, "text/plain", "test.txt", "LevelX"), ct);
+            StoredFile stored = await storage.StoreAsync(new StorageWriteRequest("probe/test.txt", input, "text/plain", "test.txt", "DiagnosticLevel"), ct);
             await using Stream output = await storage.OpenReadAsync("probe/test.txt", ct);
             using var reader = new StreamReader(output, Encoding.UTF8);
             string text = await reader.ReadToEndAsync(ct);
-            if (text != "levelx-ephemeral-probe") return Fail(item, "Ephemeral storage round trip returned different content.", "Exact content match", text);
+            if (text != "diagnostic-level-ephemeral-probe") return Fail(item, "Ephemeral storage round trip returned different content.", "Exact content match", text);
             if (verifyMetadata)
             {
                 StoredFile? metadata = await storage.GetMetadataAsync("probe/test.txt", ct);
@@ -431,9 +431,9 @@ public sealed class CommonComponentDiagnosticCatalog(
         finally { TryDeleteDirectory(root); }
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> StorageTraversalAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private async Task<EngineeringDiagnosticCheckResult> StorageTraversalAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
-        string root = Path.Combine(Path.GetTempPath(), "aegis-levelx-storage-" + Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(Path.GetTempPath(), "aegis-diagnostic-level-storage-" + Guid.NewGuid().ToString("N"));
         try
         {
             var storage = new LocalFileStorage(root);
@@ -452,11 +452,11 @@ public sealed class CommonComponentDiagnosticCatalog(
         try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
     }
 
-    private static EngineeringDiagnosticCheckResult Pass(LevelXCatalogueEntry item, string summary, string expected, string actual, string? evidence = null) =>
+    private static EngineeringDiagnosticCheckResult Pass(DiagnosticLevelCatalogueEntry item, string summary, string expected, string actual, string? evidence = null) =>
         new(item.TestId, $"{item.TestId} — {item.Name}", EngineeringDiagnosticStatus.Passed, summary, evidence, expected, actual);
-    private static EngineeringDiagnosticCheckResult Warn(LevelXCatalogueEntry item, string summary, string expected, string actual, string? evidence = null) =>
+    private static EngineeringDiagnosticCheckResult Warn(DiagnosticLevelCatalogueEntry item, string summary, string expected, string actual, string? evidence = null) =>
         new(item.TestId, $"{item.TestId} — {item.Name}", EngineeringDiagnosticStatus.Warning, summary, evidence, expected, actual);
-    private static EngineeringDiagnosticCheckResult Fail(LevelXCatalogueEntry item, string summary, string expected, string actual, string? evidence = null) =>
+    private static EngineeringDiagnosticCheckResult Fail(DiagnosticLevelCatalogueEntry item, string summary, string expected, string actual, string? evidence = null) =>
         new(item.TestId, $"{item.TestId} — {item.Name}", EngineeringDiagnosticStatus.Failed, summary, evidence, expected, actual);
 
     private sealed class ProbeAuthorizationStore : IAuthorizationStore

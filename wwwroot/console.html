@@ -194,6 +194,30 @@ async function loadDiagnosticLevelTargets(){
  const r=await fetch(api+'/diagnostic-level/targets',{cache:'no-store'});if(!r.ok)throw new Error('Target inventory HTTP '+r.status);
  diagnosticLevelTargets=await r.json();renderTargetOptions();
 }
+function selectedDiagnosticApplication(){
+ if(Number(targetType.value)!==3)return null;
+ const [applicationId,instanceId]=diagnosticTarget.value.split('|');
+ return (diagnosticLevelTargets.applications||[]).find(x=>
+  String(x.applicationId||'').toLowerCase()===String(applicationId||'').toLowerCase() &&
+  String(x.instanceId||'').toLowerCase()===String(instanceId||'').toLowerCase())||null;
+}
+function refreshDiagnosticLevelCapabilityStatus(){
+ if(Number(targetType.value)!==3){
+  clearDiagnosticLevelRunStatus();
+  return;
+ }
+ const target=selectedDiagnosticApplication();
+ if(!target)return;
+ if(target.supportsRemoteDiagnostics===false){
+  showDiagnosticLevelRunStatus(
+   'error',
+   'Remote DiagnosticLevel unavailable',
+   (target.name||target.applicationId||'Selected application')+' does not advertise remote DiagnosticLevel capability.',
+   'Check the application Diagnostics credential/configuration in Configuration before running a level.');
+ }else if(diagnosticLevelRunStatus.classList.contains('error')){
+  clearDiagnosticLevelRunStatus();
+ }
+}
 function renderTargetOptions(){
  const type=Number(targetType.value);let options=[];
  if(type===1)options=[{value:'control-plane',label:'Entire Control Plane'}];
@@ -202,9 +226,10 @@ function renderTargetOptions(){
  else options=(diagnosticLevelTargets.applications||[]).map(x=>({value:(x.applicationId||'')+'|'+(x.instanceId||''),label:(x.name||x.applicationId)+' / '+(x.instanceId||'Default')}));
  diagnosticTarget.innerHTML=options.map(x=>'<option value="'+esc(x.value)+'">'+esc(x.label)+'</option>').join('')||'<option value="">No targets available</option>';
  document.getElementById('explainTarget').disabled=type!==3||!diagnosticTarget.value;
+ refreshDiagnosticLevelCapabilityStatus();
 }
 targetType.addEventListener('change',renderTargetOptions);
-diagnosticTarget.addEventListener('change',()=>{document.getElementById('explainTarget').disabled=Number(targetType.value)!==3||!diagnosticTarget.value;});
+diagnosticTarget.addEventListener('change',()=>{document.getElementById('explainTarget').disabled=Number(targetType.value)!==3||!diagnosticTarget.value;refreshDiagnosticLevelCapabilityStatus();});
 function selectedTargetRequest(level){
  const type=Number(targetType.value),value=diagnosticTarget.value;
  if(type===1)return {level,targetType:1,targetId:'control-plane'};

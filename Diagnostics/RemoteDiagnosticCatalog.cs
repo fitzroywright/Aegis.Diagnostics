@@ -11,17 +11,20 @@ public sealed class RemoteDiagnosticCatalog
     private readonly DiagnosticsOptions options;
     private readonly IDiagnosticTargetCatalog discovery;
     private readonly IConfiguration configuration;
+    private readonly ILevelXStateExplainService stateExplain;
 
     public RemoteDiagnosticCatalog(
         IHttpClientFactory httpClientFactory,
         DiagnosticsOptions options,
         IDiagnosticTargetCatalog discovery,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILevelXStateExplainService stateExplain)
     {
         this.httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         this.discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
         this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        this.stateExplain = stateExplain ?? throw new ArgumentNullException(nameof(stateExplain));
     }
 
     public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(
@@ -55,14 +58,24 @@ public sealed class RemoteDiagnosticCatalog
             string identity = string.IsNullOrWhiteSpace(target.ApplicationId) ? target.Name : target.ApplicationId;
             string id = $"{identity}-level-{(int)requestedLevel}".ToLowerInvariant().Replace('.', '-');
             string displayName = $"{target.Name} — Level {(int)requestedLevel}";
+            string stateId = $"{identity}-state-consistency".ToLowerInvariant().Replace('.', '-');
+
+            checks.Add(new EngineeringDiagnosticCheckDefinition(
+                stateId,
+                $"{target.Name} — State consistency",
+                EngineeringDiagnosticLevel.Level5Scan,
+                cancellationToken => ExecuteStateConsistencyAsync(stateId, target, cancellationToken)));
 
             if (!target.SupportsRemoteDiagnostics)
             {
-                checks.Add(new EngineeringDiagnosticCheckDefinition(
-                    id,
-                    displayName,
-                    requestedLevel,
-                    _ => Task.FromResult(NotExecuted(id, displayName, "Application does not advertise remote diagnostics capability.", target.ApplicationId))));
+                if (requestedLevel != EngineeringDiagnosticLevel.Level5Scan)
+                {
+                    checks.Add(new EngineeringDiagnosticCheckDefinition(
+                        id,
+                        displayName,
+                        requestedLevel,
+                        _ => Task.FromResult(NotExecuted(id, displayName, "Application does not advertise remote diagnostics capability.", target.ApplicationId))));
+                }
                 continue;
             }
 
@@ -135,6 +148,70 @@ public sealed class RemoteDiagnosticCatalog
             target.ConfigurationRegisteredAtUtc
         }).ToArray()
     };
+
+    private async Task<EngineeringDiagnosticCheckResult> ExecuteStateConsistencyAsync(
+        string id,
+        DiagnosticTargetOptions target,
+        CancellationToken cancellationToken)
+    {
+        LevelXStateExplanation? explanation =
+            await stateExplain.ExplainAsync(target.ApplicationId, target.InstanceId, cancellationToken)
+                .ConfigureAwait(false);
+
+        if (explanation is null)
+        {
+            return new(
+                id,
+                $"{target.Name} — State consistency",
+                EngineeringDiagnosticStatus.Warning,
+                "Application is registered but is not present in the merged Operations application inventory.",
+                target.ApplicationId,
+                Expected: "Authoritative registration and Operations effective state are both observable.",
+                Actual: "No merged application state was returned.",
+                Code: LevelXDiagnosticCodes.ControlPlaneStateDivergence);
+        }
+
+        EngineeringDiagnosticStatus status = explanation.Result switch
+        {
+            "Failed" => EngineeringDiagnosticStatus.Failed,
+            "Warning" => EngineeringDiagnosticStatus.Warning,
+            _ => EngineeringDiagnosticStatus.Passed
+        };
+
+        string evidence = string.Join(
+            "; ",
+            new[]
+            {
+                $"NowUtc={explanation.NowUtc:O}",
+                $"LastAuthenticatedAtUtc={explanation.LastAuthenticatedAtUtc:O}",
+                $"AuthenticationAgeSeconds={explanation.AuthenticationAgeSeconds?.ToString("0.###") ?? "null"}",
+                $"LastTelemetryAtUtc={explanation.LastTelemetryAtUtc:O}",
+                $"TelemetryAgeSeconds={explanation.TelemetryAgeSeconds?.ToString("0.###") ?? "null"}",
+                $"StaleAfterSeconds={explanation.StaleAfterSeconds:0.###}",
+                $"RegistrationFresh={explanation.RegistrationFresh}",
+                $"TelemetryFresh={explanation.TelemetryFresh}",
+                $"AuthorityAvailable={explanation.AuthorityAvailable}",
+                $"EffectiveState={explanation.EffectiveState}",
+                $"DisplayedState={explanation.DisplayedState ?? "null"}",
+                $"Codes={string.Join(",", explanation.Codes)}"
+            });
+
+        string? code = explanation.Codes.Count == 0
+            ? null
+            : string.Join(",", explanation.Codes);
+
+        return new(
+            id,
+            $"{target.Name} — State consistency",
+            status,
+            string.IsNullOrWhiteSpace(explanation.Reason)
+                ? "Registration, telemetry and effective-state evidence are consistent."
+                : explanation.Reason,
+            evidence,
+            Expected: "Fresh authority/telemetry evidence must reconcile to a consistent effective and displayed state.",
+            Actual: $"Registration={explanation.RegistrationState}; Effective={explanation.EffectiveState}; Displayed={explanation.DisplayedState ?? "null"}",
+            Code: code);
+    }
 
     private async Task<EngineeringDiagnosticCheckResult> ExecuteSelfHealthAsync(CancellationToken cancellationToken)
     {

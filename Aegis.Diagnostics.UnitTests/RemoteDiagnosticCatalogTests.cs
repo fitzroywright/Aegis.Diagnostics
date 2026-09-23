@@ -136,7 +136,8 @@ public sealed class RemoteDiagnosticCatalogTests
             new TestHttpClientFactory(handler),
             new DiagnosticsOptions { RequireApiKey = false },
             new TestTargetCatalog(targets),
-            configuration);
+            configuration,
+            new TestStateExplainService());
     }
 
     private static RemoteDiagnosticCatalog CreateCatalog(HttpMessageHandler handler, bool requireCredential, bool includeCredential = false)
@@ -167,7 +168,7 @@ public sealed class RemoteDiagnosticCatalogTests
             requireCredential ? secretName : string.Empty,
             [1, 2, 3, 4, 5],
             DateTimeOffset.UtcNow);
-        return new RemoteDiagnosticCatalog(new TestHttpClientFactory(handler), options, new TestTargetCatalog([target]), configuration);
+        return new RemoteDiagnosticCatalog(new TestHttpClientFactory(handler), options, new TestTargetCatalog([target]), configuration, new TestStateExplainService());
     }
 
     private static EngineeringDiagnosticRun CreateRemoteRun(EngineeringDiagnosticStatus status)
@@ -182,6 +183,36 @@ public sealed class RemoteDiagnosticCatalogTests
         public DateTimeOffset? LastSuccessfulRefreshUtc { get; } = DateTimeOffset.UtcNow;
         public string? LastError => null;
         public bool IsStale => false;
+    }
+
+    private sealed class TestStateExplainService : ILevelXStateExplainService
+    {
+        public Task<LevelXStateExplanation?> ExplainAsync(
+            string applicationId,
+            string? instanceId,
+            CancellationToken cancellationToken = default)
+        {
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            return Task.FromResult<LevelXStateExplanation?>(new(
+                applicationId,
+                instanceId,
+                "Registered",
+                "Healthy",
+                "Registered",
+                now,
+                now.AddSeconds(-5),
+                now.AddSeconds(-5),
+                5,
+                5,
+                90,
+                true,
+                true,
+                true,
+                true,
+                "Passed",
+                [],
+                "State evidence is consistent."));
+        }
     }
 
     private sealed class TestHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory { public HttpClient CreateClient(string name)=>new(handler,false); }

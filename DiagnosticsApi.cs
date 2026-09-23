@@ -149,17 +149,17 @@ internal static class DiagnosticsApi
             return Results.Accepted();
         });
 
-        app.MapGet("/api/engineering/diagnostics/levelx/catalogue", (HttpContext c, CommonComponentDiagnosticCatalog commonComponents) =>
+        app.MapGet("/api/engineering/diagnostics/levelx/catalogue", (HttpContext c, CommonComponentDiagnosticCatalog commonComponents, CommonIsolatedCertificationCatalog isolatedCertifications) =>
         {
             if (!View(c)) return Results.Forbid();
             return Results.Ok(new
             {
-                tests = commonComponents.Catalogue
+                tests = commonComponents.Catalogue.Concat(isolatedCertifications.Catalogue)
                     .OrderBy(x => x.Component, StringComparer.OrdinalIgnoreCase)
                     .ThenByDescending(x => (int)x.IntroducedAtLevel)
                     .ThenBy(x => x.TestId, StringComparer.OrdinalIgnoreCase)
                     .ToArray(),
-                summary = commonComponents.Catalogue
+                summary = commonComponents.Catalogue.Concat(isolatedCertifications.Catalogue)
                     .GroupBy(x => new { x.Component, x.IntroducedAtLevel })
                     .Select(g => new { g.Key.Component, level = (int)g.Key.IntroducedAtLevel, count = g.Count() })
                     .OrderBy(x => x.Component)

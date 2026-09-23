@@ -3,6 +3,8 @@ name: DiagnosticLevel App Validation
 on:
   push:
     branches: [ DiagnosticLevel-AppValidation ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:

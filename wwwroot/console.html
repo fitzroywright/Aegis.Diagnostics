@@ -85,7 +85,8 @@
 .diagnostic-tab:hover{border-color:var(--title-gold)}
 .diagnostic-tab.active{background:var(--title-gold);color:#071018;border-color:var(--title-gold)}
 .diagnostic-tab-panel{display:none}
-.diagnostic-tab-panel.active{display:block}.diagnostic-level-run-status{display:none;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line-soft);border-left:5px solid var(--line);border-radius:9px;background:#071018}.diagnostic-level-run-status.visible{display:block}.diagnostic-level-run-status.error{border-left-color:var(--sunset-red);background:rgba(125,47,47,.18)}.diagnostic-level-run-status.success{border-left-color:var(--radioactive);background:rgba(20,91,64,.16)}.diagnostic-level-run-status b{display:block;margin-bottom:4px}.diagnostic-level-run-status small{display:block;color:var(--muted);margin-top:5px;overflow-wrap:anywhere}.diagnostic-level-evidence{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:7px}.diagnostic-level-evidence div{padding:8px;background:#091b28;border:1px solid var(--line-soft);border-radius:6px}.diagnostic-level-evidence small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase}.diagnostic-level-evidence b{display:block;margin-top:3px;overflow-wrap:anywhere}@media(max-width:900px){.diagnostic-level-launcher{grid-template-columns:1fr}.diagnostic-level-evidence{grid-template-columns:1fr 1fr}}
+.diagnostic-tab-panel.active{display:block}.diagnostic-level-run-status{display:none;margin:0 0 8px;padding:8px 10px;border:1px solid var(--line-soft);border-left:4px solid var(--line);border-radius:7px;background:#071018}
+.diagnostic-level-run-status.success{display:none!important}.diagnostic-level-run-status.visible{display:block}.diagnostic-level-run-status.error{border-left-color:var(--sunset-red);background:rgba(125,47,47,.18)}.diagnostic-level-run-status.success{border-left-color:var(--radioactive);background:rgba(20,91,64,.16)}.diagnostic-level-run-status b{display:block;margin-bottom:4px}.diagnostic-level-run-status small{display:block;color:var(--muted);margin-top:5px;overflow-wrap:anywhere}.diagnostic-level-evidence{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:7px}.diagnostic-level-evidence div{padding:8px;background:#091b28;border:1px solid var(--line-soft);border-radius:6px}.diagnostic-level-evidence small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase}.diagnostic-level-evidence b{display:block;margin-top:3px;overflow-wrap:anywhere}@media(max-width:900px){.diagnostic-level-launcher{grid-template-columns:1fr}.diagnostic-level-evidence{grid-template-columns:1fr 1fr}}
 .top-buttons a.module-active{box-shadow:0 0 0 2px var(--title-gold),0 0 14px 3px rgba(255,204,102,.72),inset 0 1px 0 rgba(255,255,255,.28)!important;filter:brightness(1.06)}.top-buttons a.nav-flash{animation:moduleFlash .18s ease-out}@keyframes moduleFlash{0%{filter:brightness(1);transform:scale(1)}45%{filter:brightness(1.38);transform:scale(1.035)}100%{filter:brightness(1.06);transform:scale(1)}}.aegis-busy-overlay{position:absolute;inset:0;z-index:80;display:grid;place-items:center;background:rgba(0,5,12,.84);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .16s ease}.aegis-busy-overlay.visible{opacity:1;pointer-events:auto}.aegis-sensor{position:relative;width:min(420px,72vw);aspect-ratio:1;display:grid;place-items:center}.aegis-sensor-ring{position:absolute;border-radius:50%;border:1px solid rgba(102,204,255,.35);box-shadow:inset 0 0 20px rgba(85,136,238,.08)}.aegis-sensor-ring.r1{width:82%;height:82%;border-top:3px solid #5588ee;border-right:2px solid rgba(255,204,102,.78);animation:sensorSpin 5.5s linear infinite}.aegis-sensor-ring.r2{width:64%;height:64%;border-left:3px solid #7799dd;border-bottom:2px solid #66ccff;animation:sensorSpinReverse 4.2s linear infinite}.aegis-sensor-ring.r3{width:46%;height:46%;border-top:2px solid #99ccff;border-left:2px solid rgba(255,204,102,.85);animation:sensorSpin 3.4s linear infinite}.aegis-sensor-ticks{position:absolute;width:92%;height:92%;border-radius:50%;background:repeating-conic-gradient(from 0deg,rgba(102,204,255,.42) 0 1deg,transparent 1deg 10deg);mask:radial-gradient(circle,transparent 0 42%,#000 43% 45%,transparent 46%)}.aegis-sensor-sweep{position:absolute;width:78%;height:78%;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 318deg,rgba(102,204,255,.04) 326deg,rgba(102,204,255,.55) 349deg,rgba(255,204,102,.78) 358deg,transparent 360deg);filter:drop-shadow(0 0 9px rgba(102,204,255,.7));animation:sensorSpin 1.75s linear infinite}.aegis-sensor-pulse{position:absolute;width:28%;height:28%;border:1px solid rgba(102,204,255,.55);border-radius:50%;animation:sensorPulse 1.45s ease-out infinite}.aegis-sensor-core{position:relative;z-index:3;width:72px;height:78px;border:2px solid #66ccff;border-radius:8px;background:linear-gradient(180deg,#0b2638,#06121d);box-shadow:0 0 22px rgba(102,204,255,.75),0 0 0 5px rgba(85,136,238,.10);display:grid;align-content:center;gap:7px;padding:11px}.aegis-sensor-core i{display:block;height:6px;border-radius:2px;background:#99ccff;box-shadow:0 0 6px rgba(153,204,255,.75)}.aegis-sensor-core i:nth-child(2){background:#88eeff}.aegis-sensor-core i:nth-child(3){background:#7799dd}.aegis-sensor-copy{position:absolute;left:50%;bottom:-58px;transform:translateX(-50%);width:420px;text-align:center;text-transform:uppercase;font:900 13px/1.3 Arial,sans-serif;letter-spacing:.12em;color:#66ccff}.aegis-sensor-copy b{display:block;color:#f3f3fc;font-size:18px;margin-bottom:5px}.aegis-sensor-copy span{color:#ffcc66}.aegis-sensor-dot{position:absolute;width:9px;height:9px;border-radius:50%;background:#ffcc66;box-shadow:0 0 10px #ffcc66}.aegis-sensor-dot.d1{top:8%;left:47%}.aegis-sensor-dot.d2{right:10%;top:52%;background:#66ccff;box-shadow:0 0 10px #66ccff}.aegis-sensor-dot.d3{left:14%;bottom:20%;background:#7799dd;box-shadow:0 0 10px #7799dd}@keyframes sensorSpin{to{transform:rotate(360deg)}}@keyframes sensorSpinReverse{to{transform:rotate(-360deg)}}@keyframes sensorPulse{0%{transform:scale(.65);opacity:.85}100%{transform:scale(2.5);opacity:0}}@media(prefers-reduced-motion:reduce){.aegis-sensor-ring,.aegis-sensor-sweep,.aegis-sensor-pulse{animation:none}}}
 .diagnostic-level-live-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:14px}.diagnostic-level-live-card{border:1px solid var(--line-soft);border-top:2px solid var(--arctic-ice);border-radius:9px;padding:12px;background:#06131f}.diagnostic-level-live-card b,.diagnostic-level-live-card small{display:block}.diagnostic-level-live-card .live-state{font-size:18px;color:var(--title-gold)}.diagnostic-level-history-tools{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:8px;padding:12px;border:1px solid var(--line-soft);border-top:2px solid var(--beta-blue);border-radius:9px;background:#061018;margin-bottom:10px}.diagnostic-level-history-tools label{display:grid;gap:4px;color:var(--arctic-ice);font-size:10px;font-weight:900;text-transform:uppercase}.diagnostic-level-history-tools input,.diagnostic-level-history-tools select{width:100%;background:#071722;color:var(--starship-white);border:1px solid var(--line);border-radius:6px;padding:8px}.diagnostic-level-history-actions{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.diagnostic-level-history-actions button{border:1px solid var(--line);border-radius:7px;background:var(--alpha-blue);color:#071018;padding:8px 12px;font-weight:900;cursor:pointer}.diagnostic-level-history-list{display:grid;gap:9px}.diagnostic-level-history-run{border:1px solid var(--line-soft);border-left:5px solid var(--beta-blue);border-radius:8px;padding:11px;background:#061018}.diagnostic-level-history-run header{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}.diagnostic-level-history-run header input{width:18px;height:18px}.diagnostic-level-history-run .meta{color:var(--muted);font-size:11px;margin-top:4px;overflow-wrap:anywhere}.diagnostic-level-history-tests{margin-top:8px;display:grid;gap:5px}.diagnostic-level-history-test{padding:7px 9px;border-left:4px solid var(--line);background:#081824}.diagnostic-level-history-test.Passed{border-left-color:var(--radioactive)}.diagnostic-level-history-test.Warning,.diagnostic-level-history-test.InterventionRequired{border-left-color:var(--title-gold)}.diagnostic-level-history-test.Failed{border-left-color:var(--sunset-red)}.diagnostic-level-compare{display:none;margin:10px 0;padding:12px;border:1px solid var(--line-soft);border-top:2px solid var(--title-gold);border-radius:9px;background:#071018}.diagnostic-level-compare.visible{display:block}.diagnostic-level-compare-table{width:100%;border-collapse:collapse}.diagnostic-level-compare-table th,.diagnostic-level-compare-table td{padding:7px;border-bottom:1px solid var(--line-soft);vertical-align:top;text-align:left;font-size:11px}.diagnostic-level-compare-table th{color:var(--arctic-ice)}@media(max-width:1050px){.diagnostic-level-history-tools{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.diagnostic-level-history-tools{grid-template-columns:1fr}.diagnostic-level-history-run header{grid-template-columns:auto 1fr}.diagnostic-level-history-run header>span:last-child{grid-column:2}}
 </style>
@@ -189,12 +190,26 @@ const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),re
 let diagnosticLevelTargets={controlPlane:[],applications:[]};
 let activeRemoteDiagnosticRunId=localStorage.getItem('aegis.diagnostics.activeRemoteRunId')||'';
 let activeRemoteDiagnosticLevel=Number(localStorage.getItem('aegis.diagnostics.activeRemoteLevel')||0);
-function setRunnerIdleState(idle){
+function setRunnerStatus(state,level,detail){
  const tile=document.getElementById('diagnosticIdleTile');
  if(!tile)return;
+ const normalized=String(state||'IDLE').toUpperCase();
+ const idle=normalized==='IDLE';
  tile.classList.toggle('runner-idle',idle);
  tile.classList.toggle('runner-active',!idle);
- tile.innerHTML=idle?'<b>IDLE</b>READY<small>No diagnostic active</small>':'<b>BUSY</b>ACTIVE<small>Diagnostic in progress</small>';
+ let label=normalized;
+ let sub=idle?'READY':(level?'LEVEL '+level:'ACTIVE');
+ let small=detail||'No diagnostic active';
+ if(normalized==='ACCEPTED')small='Request accepted';
+ else if(normalized==='RUNNING')small=detail||'Diagnostic in progress';
+ else if(normalized==='COMPLETED')small=detail||'Diagnostic completed';
+ else if(normalized==='INTERRUPTED')small=detail||'Diagnostic interrupted';
+ else if(normalized==='CANCELLED')small=detail||'Diagnostic cancelled';
+ else if(normalized==='UNKNOWN')small=detail||'Diagnostic state unknown';
+ tile.innerHTML='<b>'+esc(label)+'</b>'+esc(sub)+'<small>'+esc(small)+'</small>';
+}
+function setRunnerIdleState(idle){
+ setRunnerStatus(idle?'IDLE':'BUSY',activeRemoteDiagnosticLevel||0,idle?'No diagnostic active':'Diagnostic in progress');
 }
 function pressDiagnosticLevelButton(level){
  const button=document.querySelector('.level[data-level="'+level+'"]');
@@ -426,6 +441,9 @@ async function loadDiagnosticLevelLive(){
    if(activeRemoteDiagnosticLevel){
     localStorage.setItem('aegis.diagnostics.activeRemoteLevel',String(activeRemoteDiagnosticLevel));
     setRunningDiagnosticLevel(activeRemoteDiagnosticLevel);
+    const liveState=hxStateName(selectedLive.state);
+    const liveDetail=selectedLive.currentTestName||selectedLive.currentTestId||'Diagnostic in progress';
+    setRunnerStatus(liveState,activeRemoteDiagnosticLevel,liveDetail);
    }
   }
   let cards=list.map(v=>'<article class="diagnostic-level-live-card"><b>'+esc(v.applicationId||'Unknown')+' · '+esc(v.instanceId||'Default')+'</b><span class="live-state">'+esc(hxStateName(v.state))+' · LEVEL '+esc(v.level)+'</span><small>Run '+esc(v.runId)+'</small><small>Started '+esc(localDateTime(v.acceptedAtUtc))+' · Elapsed '+esc(hxElapsed(v.acceptedAtUtc))+'</small>'+(v.currentTestName?'<small><b>Running test:</b> '+esc(v.currentTestName)+(v.currentTestId?' · '+esc(v.currentTestId):'')+'</small>':v.currentTestId?'<small><b>Running test:</b> '+esc(v.currentTestId)+'</small>':'<small>Preparing next test…</small>')+'<small>Last progress '+esc(localDateTime(v.lastUpdatedAtUtc))+'</small></article>');
@@ -445,9 +463,13 @@ async function loadDiagnosticLevelLive(){
      cards=cards.filter(html=>!html.includes(esc(activeRemoteDiagnosticRunId)));
      cards.unshift('<article class="diagnostic-level-live-card"><b>'+esc(run.application||'Unknown')+' · '+esc(run.component||'Unknown')+'</b><span class="live-state">'+esc(state)+' · LEVEL '+esc(run.level)+'</span><small>Run '+esc(run.runId)+'</small><small>Started '+esc(localDateTime(startedAt))+(finished?' · Stopped '+esc(localDateTime(completedAt||run.lastProgressAtUtc)):' · Elapsed '+esc(hxElapsed(startedAt)))+'</small>'+(run.currentTestId?'<small>Current test '+esc(run.currentTestId)+'</small>':'')+(finished?'<small>Result: '+esc(outcome)+'</small>':'<small>Last progress '+esc(localDateTime(run.lastProgressAtUtc||startedAt))+'</small>')+'</article>');
      if(finished){
+      setRunnerStatus(state,run.level,'Run '+run.runId);
       localStorage.removeItem('aegis.diagnostics.activeRemoteRunId');
       activeRemoteDiagnosticRunId='';
-      clearRunningDiagnosticLevel();
+      activeRemoteDiagnosticLevel=0;
+      localStorage.removeItem('aegis.diagnostics.activeRemoteLevel');
+      document.querySelectorAll('.level[data-level]').forEach(button=>button.classList.remove('level-running'));
+      setDiagnosticLevelButtonsDisabled(false);
      }
     }
    }catch{}
@@ -556,6 +578,7 @@ async function run(level){
    localStorage.setItem('aegis.diagnostics.activeRemoteLevel',String(level));
    setRunningDiagnosticLevel(level);
   }
+  setRunnerStatus('ACCEPTED',level,accepted?.application?'Target: '+accepted.application:'Remote diagnostic accepted');
   showDiagnosticLevelRunStatus('success','DiagnosticLevel request accepted','Remote Level '+level+' run was accepted.'+(accepted?.application?' Target: '+accepted.application+'.':''),accepted?.runId?'Run '+accepted.runId:'HTTP '+r.status);
   window.aegisAudio?.play('success');
   await Promise.all([loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);

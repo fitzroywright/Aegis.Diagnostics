@@ -43,6 +43,12 @@ jobs:
           repository: fitzroywright/Common.Registration
           path: Common/Common.Registration
 
+      - name: Checkout Common.Storage
+        uses: actions/checkout@v4
+        with:
+          repository: fitzroywright/Common.Storage
+          path: Common/Common.Storage
+
       - name: Move Common to sibling layout
         shell: pwsh
         run: |

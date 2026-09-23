@@ -282,7 +282,7 @@ async function loadDiagnosticLevelLive(){
   const r=await fetch(api+'/diagnostic-level/live',{cache:'no-store'});
   if(!r.ok)throw new Error('HTTP '+r.status);
   const x=await r.json(),list=x.runs||[];
-  let cards=list.map(v=>'<article class="diagnostic-level-live-card"><b>'+esc(v.applicationId||'Unknown')+' · '+esc(v.instanceId||'Default')+'</b><span class="live-state">'+esc(hxStateName(v.state))+' · LEVEL '+esc(v.level)+'</span><small>Run '+esc(v.runId)+'</small><small>Started '+esc(localDateTime(v.acceptedAtUtc))+' · Elapsed '+esc(hxElapsed(v.acceptedAtUtc))+'</small><small>Last progress '+esc(localDateTime(v.lastUpdatedAtUtc))+'</small></article>');
+  let cards=list.map(v=>'<article class="diagnostic-level-live-card"><b>'+esc(v.applicationId||'Unknown')+' · '+esc(v.instanceId||'Default')+'</b><span class="live-state">'+esc(hxStateName(v.state))+' · LEVEL '+esc(v.level)+'</span><small>Run '+esc(v.runId)+'</small><small>Started '+esc(localDateTime(v.acceptedAtUtc))+' · Elapsed '+esc(hxElapsed(v.acceptedAtUtc))+'</small>'+(v.currentTestName?'<small><b>Running test:</b> '+esc(v.currentTestName)+(v.currentTestId?' · '+esc(v.currentTestId):'')+'</small>':v.currentTestId?'<small><b>Running test:</b> '+esc(v.currentTestId)+'</small>':'<small>Waiting for current test…</small>')+'<small>Last progress '+esc(localDateTime(v.lastUpdatedAtUtc))+'</small></article>');
 
   if(activeRemoteDiagnosticRunId){
    try{

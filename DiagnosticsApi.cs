@@ -379,6 +379,7 @@ internal static class DiagnosticsApi
                 configuration.GetValue("Diagnostics:RemoteRunStaleSeconds", 300),
                 30,
                 86400);
+            await coordinator.RefreshPendingProgressAsync(ct);
             await coordinator.MarkUnknownAfterAsync(TimeSpan.FromSeconds(staleSeconds), ct);
             return Results.Ok(new { runs = coordinator.Pending, staleAfterSeconds = staleSeconds });
         });

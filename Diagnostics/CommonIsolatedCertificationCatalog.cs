@@ -15,7 +15,7 @@ using System.Text;
 
 public sealed class CommonIsolatedCertificationCatalog
 {
-    private readonly IReadOnlyList<LevelXCatalogueEntry> catalogue =
+    private readonly IReadOnlyList<DiagnosticLevelCatalogueEntry> catalogue =
     [
         new("DIA-009", CommonDiagnosticTargets.Diagnostics, "Isolated run-store round trip", EngineeringDiagnosticLevel.Level3Verification, false, "Persist and retrieve a synthetic diagnostic run in a temporary isolated store."),
         new("DIA-010", CommonDiagnosticTargets.Diagnostics, "Cumulative engine execution", EngineeringDiagnosticLevel.Level3Verification, false, "Verify Level 3 executes Level 5, 4 and 3 check definitions."),
@@ -60,11 +60,11 @@ public sealed class CommonIsolatedCertificationCatalog
         new("STO-012", CommonDiagnosticTargets.Storage, "Ephemeral multi-object certification", EngineeringDiagnosticLevel.Level1CriticalIntervention, false, "Store, read, verify and delete multiple isolated objects with guaranteed cleanup.")
     ];
 
-    public IReadOnlyList<LevelXCatalogueEntry> Catalogue => catalogue;
+    public IReadOnlyList<DiagnosticLevelCatalogueEntry> Catalogue => catalogue;
 
     public IReadOnlyList<EngineeringDiagnosticCheckDefinition> Build(DiagnosticTarget target)
     {
-        IEnumerable<LevelXCatalogueEntry> selected = target.Type switch
+        IEnumerable<DiagnosticLevelCatalogueEntry> selected = target.Type switch
         {
             DiagnosticTargetType.ControlPlane => catalogue,
             DiagnosticTargetType.CommonComponent => catalogue.Where(x => x.Component.Equals(target.TargetId, StringComparison.OrdinalIgnoreCase)),
@@ -77,7 +77,7 @@ public sealed class CommonIsolatedCertificationCatalog
             ct => RunAsync(x, ct))).ToArray();
     }
 
-    private async Task<EngineeringDiagnosticCheckResult> RunAsync(LevelXCatalogueEntry item, CancellationToken ct) =>
+    private async Task<EngineeringDiagnosticCheckResult> RunAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct) =>
         item.TestId switch
         {
             "DIA-009" => await DiagnosticsRunStoreAsync(item, ct),
@@ -124,14 +124,14 @@ public sealed class CommonIsolatedCertificationCatalog
             _ => Fail(item, "Unknown isolated certification test.", "Known test", item.TestId)
         };
 
-    private static async Task<EngineeringDiagnosticCheckResult> DiagnosticsRunStoreAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> DiagnosticsRunStoreAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("diag-store");
         try
         {
             var store = new JsonEngineeringDiagnosticRunStore(Path.Combine(root, "runs.json"));
             DateTimeOffset now = DateTimeOffset.UtcNow;
-            var run = new EngineeringDiagnosticRun(Guid.NewGuid(), EngineeringDiagnosticLevel.Level3Verification, "Probe", "Test", "LevelX", null, now, now, EngineeringDiagnosticStatus.Passed, []);
+            var run = new EngineeringDiagnosticRun(Guid.NewGuid(), EngineeringDiagnosticLevel.Level3Verification, "Probe", "Test", "DiagnosticLevel", null, now, now, EngineeringDiagnosticStatus.Passed, []);
             await store.SaveAsync(run, ct);
             EngineeringDiagnosticRun? loaded = await store.GetAsync(run.RunId, ct);
             return loaded?.RunId == run.RunId ? Pass(item, "Isolated run-store round trip succeeded.", "Same RunId", run.RunId.ToString()) : Fail(item, "Isolated run-store round trip failed.", run.RunId.ToString(), loaded?.RunId.ToString() ?? "Missing");
@@ -139,7 +139,7 @@ public sealed class CommonIsolatedCertificationCatalog
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> DiagnosticsCumulativeEngineAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> DiagnosticsCumulativeEngineAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("diag-engine");
         try
@@ -152,31 +152,31 @@ public sealed class CommonIsolatedCertificationCatalog
                 PassedDefinition("probe-l4", EngineeringDiagnosticLevel.Level4Analysis),
                 PassedDefinition("probe-l3", EngineeringDiagnosticLevel.Level3Verification)
             ];
-            EngineeringDiagnosticRun run = await engine.RunAsync(EngineeringDiagnosticLevel.Level3Verification, DiagnosticTarget.EntireControlPlane(), "Probe", "Test", "LevelX", null, defs, ct);
+            EngineeringDiagnosticRun run = await engine.RunAsync(EngineeringDiagnosticLevel.Level3Verification, DiagnosticTarget.EntireControlPlane(), "Probe", "Test", "DiagnosticLevel", null, defs, ct);
             return run.Checks.Count == 3 ? Pass(item, "Level 3 cumulatively executed Level 5, 4 and 3 checks.", "3 checks", run.Checks.Count.ToString()) : Fail(item, "Cumulative engine execution count is incorrect.", "3 checks", run.Checks.Count.ToString());
         }
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> DiagnosticsFailureContainmentAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> DiagnosticsFailureContainmentAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("diag-fail");
         try
         {
             var engine = new EngineeringDiagnosticEngine(new JsonEngineeringDiagnosticRunStore(Path.Combine(root, "runs.json")));
-            EngineeringDiagnosticRun run = await engine.RunAsync(EngineeringDiagnosticLevel.Level2Repair, DiagnosticTarget.EntireControlPlane(), "Probe", "Test", "LevelX", "isolated", [new("probe-failure", "Probe failure", EngineeringDiagnosticLevel.Level2Repair, _ => throw new InvalidOperationException("isolated probe"))], ct);
+            EngineeringDiagnosticRun run = await engine.RunAsync(EngineeringDiagnosticLevel.Level2Repair, DiagnosticTarget.EntireControlPlane(), "Probe", "Test", "DiagnosticLevel", "isolated", [new("probe-failure", "Probe failure", EngineeringDiagnosticLevel.Level2Repair, _ => throw new InvalidOperationException("isolated probe"))], ct);
             return run.Status == EngineeringDiagnosticStatus.Failed && run.Checks.Count == 1 ? Pass(item, "Throwing check was contained as a failed result.", "Failed run with 1 result", $"{run.Status}/{run.Checks.Count}") : Fail(item, "Engine did not contain an isolated check failure.", "Failed/1", $"{run.Status}/{run.Checks.Count}");
         }
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> DiagnosticsWarningAggregationAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> DiagnosticsWarningAggregationAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("diag-warn");
         try
         {
             var engine = new EngineeringDiagnosticEngine(new JsonEngineeringDiagnosticRunStore(Path.Combine(root, "runs.json")));
-            EngineeringDiagnosticRun run = await engine.RunAsync(EngineeringDiagnosticLevel.Level2Repair, DiagnosticTarget.EntireControlPlane(), "Probe", "Test", "LevelX", "isolated", [new("probe-warning", "Probe warning", EngineeringDiagnosticLevel.Level5Scan, _ => Task.FromResult(new EngineeringDiagnosticCheckResult("probe-warning", "Probe warning", EngineeringDiagnosticStatus.Warning, "warning")))], ct);
+            EngineeringDiagnosticRun run = await engine.RunAsync(EngineeringDiagnosticLevel.Level2Repair, DiagnosticTarget.EntireControlPlane(), "Probe", "Test", "DiagnosticLevel", "isolated", [new("probe-warning", "Probe warning", EngineeringDiagnosticLevel.Level5Scan, _ => Task.FromResult(new EngineeringDiagnosticCheckResult("probe-warning", "Probe warning", EngineeringDiagnosticStatus.Warning, "warning")))], ct);
             return run.Status == EngineeringDiagnosticStatus.InterventionRequired || run.Status == EngineeringDiagnosticStatus.Warning
                 ? Pass(item, "Warning/intervention aggregation remains non-success.", "Warning or InterventionRequired", run.Status.ToString())
                 : Fail(item, "Warning aggregation unexpectedly passed.", "Warning or InterventionRequired", run.Status.ToString());
@@ -184,7 +184,7 @@ public sealed class CommonIsolatedCertificationCatalog
         finally { Cleanup(root); }
     }
 
-    private static EngineeringDiagnosticCheckResult DiagnosticsTargetModel(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult DiagnosticsTargetModel(DiagnosticLevelCatalogueEntry item)
     {
         DiagnosticTarget[] targets =
         [
@@ -196,7 +196,7 @@ public sealed class CommonIsolatedCertificationCatalog
         return targets.Select(x => x.Type).Distinct().Count() == 4 ? Pass(item, "All target types construct with distinct identities.", "4 target types", "4") : Fail(item, "Target model certification failed.", "4 target types", targets.Select(x => x.Type).Distinct().Count().ToString());
     }
 
-    private static EngineeringDiagnosticCheckResult DiagnosticsStatusPrecedence(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult DiagnosticsStatusPrecedence(DiagnosticLevelCatalogueEntry item)
     {
         EngineeringDiagnosticStatus status = EngineeringDiagnosticPolicy.CalculateStatus(
         [
@@ -211,43 +211,43 @@ public sealed class CommonIsolatedCertificationCatalog
     private static EngineeringDiagnosticCheckDefinition PassedDefinition(string id, EngineeringDiagnosticLevel level) =>
         new(id, id, level, _ => Task.FromResult(new EngineeringDiagnosticCheckResult(id, id, EngineeringDiagnosticStatus.Passed, "passed")));
 
-    private static async Task<EngineeringDiagnosticCheckResult> RegistrationFirstPendingAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> RegistrationFirstPendingAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("reg-pending"); string path = Path.Combine(root, "identity.json");
         try
         {
             var handler = new ProbeHandler(_ => Json(HttpStatusCode.OK, new { registrationId = "reg-new", claimToken = "claim", state = "Pending" }));
-            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "LevelX", path));
+            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "DiagnosticLevel", path));
             RegistrationLifecycleStatus status = await client.StepAsync(cancellationToken: ct);
             return status.State == RegistrationLifecycleState.Pending && status.RegistrationId == "reg-new" ? Pass(item, "First introduction reached Pending.", "Pending/reg-new", $"{status.State}/{status.RegistrationId}") : Fail(item, "First introduction did not reach Pending.", "Pending/reg-new", $"{status.State}/{status.RegistrationId}");
         }
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> RegistrationClaimAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> RegistrationClaimAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("reg-claim"); string path = Path.Combine(root, "identity.json");
         try
         {
             var store = new FileRegistrationIdentityStore(path);
-            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "LevelX", ct);
+            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "DiagnosticLevel", ct);
             await store.SaveAsync(d with { RegistrationId = "reg-1", ClaimToken = "claim" }, ct);
             var handler = new ProbeHandler(_ => Json(HttpStatusCode.OK, new { registrationId = "reg-1", credential = "durable", state = "Registered" }));
-            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "LevelX", path), store);
+            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "DiagnosticLevel", path), store);
             RegistrationLifecycleStatus status = await client.StepAsync(cancellationToken: ct);
-            RegistrationIdentityDocument persisted = await store.LoadOrCreateAsync("Aegis.Hello", "LevelX", ct);
+            RegistrationIdentityDocument persisted = await store.LoadOrCreateAsync("Aegis.Hello", "DiagnosticLevel", ct);
             return status.State == RegistrationLifecycleState.Registered && persisted.ClaimToken is null && persisted.Credential == "durable" ? Pass(item, "Approved claim produced durable Registered identity.", "Registered; claim consumed", "Registered; claim consumed") : Fail(item, "Approved claim certification failed.", "Registered; claim consumed", status.State.ToString());
         }
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> RegistrationRecoveryAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> RegistrationRecoveryAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("reg-recovery"); string path = Path.Combine(root, "identity.json");
         try
         {
             var store = new FileRegistrationIdentityStore(path);
-            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "LevelX", ct);
+            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "DiagnosticLevel", ct);
             await store.SaveAsync(d with { RegistrationId = "reg-1", Credential = "old" }, ct);
             int calls = 0;
             var handler = new ProbeHandler(req =>
@@ -257,37 +257,37 @@ public sealed class CommonIsolatedCertificationCatalog
                     ? Json(HttpStatusCode.Unauthorized, new { error = "invalid" })
                     : Json(HttpStatusCode.OK, new { registrationId = "reg-1", claimToken = "recovery", state = "RecoveryPending" });
             });
-            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "LevelX", path), store);
+            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "DiagnosticLevel", path), store);
             RegistrationLifecycleStatus status = await client.StepAsync(cancellationToken: ct);
             return status.State == RegistrationLifecycleState.RecoveryPending && calls == 2 ? Pass(item, "Invalid credential entered explicit recovery.", "RecoveryPending; 2 calls", $"{status.State}; {calls} calls") : Fail(item, "Invalid credential recovery certification failed.", "RecoveryPending; 2 calls", $"{status.State}; {calls} calls");
         }
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> RegistrationRevokedAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> RegistrationRevokedAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("reg-revoked"); string path = Path.Combine(root, "identity.json");
         try
         {
             var store = new FileRegistrationIdentityStore(path);
-            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "LevelX", ct);
+            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "DiagnosticLevel", ct);
             await store.SaveAsync(d with { RegistrationId = "reg-1", Credential = "revoked" }, ct);
             int calls = 0;
             var handler = new ProbeHandler(_ => { calls++; return Json(HttpStatusCode.Gone, new { registrationId = "reg-1", error = "revoked" }); });
-            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "LevelX", path), store);
+            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "DiagnosticLevel", path), store);
             RegistrationLifecycleStatus status = await client.StepAsync(cancellationToken: ct);
             return status.State == RegistrationLifecycleState.Revoked && calls == 1 ? Pass(item, "Revoked credential remained Revoked without re-registration.", "Revoked; 1 call", $"{status.State}; {calls} call") : Fail(item, "Revocation enforcement failed.", "Revoked; 1 call", $"{status.State}; {calls} calls");
         }
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> RegistrationPurgeAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> RegistrationPurgeAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("reg-purge"); string path = Path.Combine(root, "identity.json");
         try
         {
             var store = new FileRegistrationIdentityStore(path);
-            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "LevelX", ct);
+            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "DiagnosticLevel", ct);
             string installation = d.InstallationId;
             await store.SaveAsync(d with { RegistrationId = "old-reg", ClaimToken = "old-claim" }, ct);
             int calls = 0;
@@ -298,61 +298,61 @@ public sealed class CommonIsolatedCertificationCatalog
                     ? Json(HttpStatusCode.NotFound, new { error = "purged" })
                     : Json(HttpStatusCode.OK, new { registrationId = "new-reg", claimToken = "new-claim", state = "Pending" });
             });
-            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "LevelX", path), store);
+            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "DiagnosticLevel", path), store);
             RegistrationLifecycleStatus status = await client.StepAsync(cancellationToken: ct);
-            RegistrationIdentityDocument persisted = await store.LoadOrCreateAsync("Aegis.Hello", "LevelX", ct);
+            RegistrationIdentityDocument persisted = await store.LoadOrCreateAsync("Aegis.Hello", "DiagnosticLevel", ct);
             bool ok = status.State == RegistrationLifecycleState.Pending && status.RegistrationId == "new-reg" && persisted.InstallationId == installation && calls == 2;
             return ok ? Pass(item, "Purge forced clean re-introduction while preserving InstallationId.", "Pending/new-reg; same InstallationId", "Passed") : Fail(item, "Purge re-introduction certification failed.", "Pending/new-reg; same InstallationId", $"{status.State}/{status.RegistrationId}; calls={calls}");
         }
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> RegistrationConflictAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> RegistrationConflictAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("reg-conflict"); string path = Path.Combine(root, "identity.json");
         try
         {
             var store = new FileRegistrationIdentityStore(path);
-            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "LevelX", ct);
+            RegistrationIdentityDocument d = await store.LoadOrCreateAsync("Aegis.Hello", "DiagnosticLevel", ct);
             await store.SaveAsync(d with { RegistrationId = "reg-1", Credential = "durable" }, ct);
             int calls = 0;
             var handler = new ProbeHandler(_ => { calls++; return Json(HttpStatusCode.Conflict, new { registrationId = "reg-1", state = "IdentityConflict", error = "conflict" }); });
-            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "LevelX", path), store);
+            var client = new RegistrationLifecycleClient(new HttpClient(handler), new(new Uri("http://127.0.0.1/"), "Aegis.Hello", "DiagnosticLevel", path), store);
             RegistrationLifecycleStatus status = await client.StepAsync(cancellationToken: ct);
             return status.State == RegistrationLifecycleState.IdentityConflict && calls == 1 ? Pass(item, "IdentityConflict was surfaced without self-healing.", "IdentityConflict; 1 call", $"{status.State}; {calls} call") : Fail(item, "IdentityConflict enforcement failed.", "IdentityConflict; 1 call", $"{status.State}; {calls} calls");
         }
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> SecurityGrantedAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> SecurityGrantedAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var store = new ProbeAuthorizationStore([new RoleDefinition("operator", "Operator", [OperationalPermissions.AlertsResolve])], ["operator"], []);
         AuthorizationDecision d = await new PermissionAuthorizer(store).AuthorizeAsync(new AuthorizationSubject("u", []), OperationalPermissions.AlertsResolve, ct);
         return d.Allowed ? Pass(item, "Explicit capability grant is allowed.", "Allowed", "Allowed") : Fail(item, "Explicit capability grant was denied.", "Allowed", "Denied");
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> SecurityGroupAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> SecurityGroupAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var store = new ProbeAuthorizationStore([new RoleDefinition("group-role", "Group", [OperationalPermissions.HistoryView])], [], ["group-role"]);
         AuthorizationDecision d = await new PermissionAuthorizer(store).AuthorizeAsync(new AuthorizationSubject("u", ["IT"]), OperationalPermissions.HistoryView, ct);
         return d.Allowed ? Pass(item, "Group role capability is allowed.", "Allowed", "Allowed") : Fail(item, "Group role capability was denied.", "Allowed", "Denied");
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> SecurityWildcardAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> SecurityWildcardAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var store = new ProbeAuthorizationStore([new RoleDefinition("root", "Root", [PermissionAuthorizer.AllPermissions])], ["root"], []);
         AuthorizationDecision d = await new PermissionAuthorizer(store).AuthorizeAsync(new AuthorizationSubject("u", []), OperationalPermissions.DiagnosticsRun, ct);
         return d.Allowed ? Pass(item, "Wildcard capability grants requested permission.", "Allowed", "Allowed") : Fail(item, "Wildcard capability failed.", "Allowed", "Denied");
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> SecurityNoRoleAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> SecurityNoRoleAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var store = new ProbeAuthorizationStore([], [], []);
         AuthorizationDecision d = await new PermissionAuthorizer(store).AuthorizeAsync(new AuthorizationSubject("u", []), OperationalPermissions.DiagnosticsRun, ct);
         return !d.Allowed ? Pass(item, "Subject with no roles is denied.", "Denied", "Denied") : Fail(item, "Subject with no roles was allowed.", "Denied", "Allowed");
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> SecurityPermissionMatrixAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> SecurityPermissionMatrixAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var store = new ProbeAuthorizationStore([new RoleDefinition("all-ops", "All", OperationalPermissions.All)], ["all-ops"], []);
         var authorizer = new PermissionAuthorizer(store);
@@ -361,14 +361,14 @@ public sealed class CommonIsolatedCertificationCatalog
         return Pass(item, "Operational permission matrix certified.", $"{OperationalPermissions.All.Count} permissions allowed", OperationalPermissions.All.Count.ToString());
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> SecurityCaseInsensitiveAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> SecurityCaseInsensitiveAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var store = new ProbeAuthorizationStore([new RoleDefinition("operator", "Operator", [OperationalPermissions.DiagnosticsRun.ToUpperInvariant()])], ["operator"], []);
         bool allowed = await new PermissionAuthorizer(store).CanAsync(new AuthorizationSubject("u", []), OperationalPermissions.DiagnosticsRun.ToLowerInvariant(), ct);
         return allowed ? Pass(item, "Permission matching is case-insensitive.", "Allowed", "Allowed") : Fail(item, "Permission matching became case-sensitive.", "Allowed", "Denied");
     }
 
-    private static EngineeringDiagnosticCheckResult SecretsSingleOrder(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult SecretsSingleOrder(DiagnosticLevelCatalogueEntry item)
     {
         IConfiguration c = Config(new() { ["CommonSecrets:Mode"]="Development", ["CommonSecrets:Providers:Only:Type"]="Configuration" });
         var o = c.GetSection("CommonSecrets").Get<CommonSecretsOptions>()!;
@@ -376,42 +376,42 @@ public sealed class CommonIsolatedCertificationCatalog
         return order.SequenceEqual(["Only"]) ? Pass(item, "Single-provider order inference works.", "Only", string.Join(",", order)) : Fail(item, "Single-provider order inference failed.", "Only", string.Join(",", order));
     }
 
-    private static EngineeringDiagnosticCheckResult SecretsMultipleOrder(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult SecretsMultipleOrder(DiagnosticLevelCatalogueEntry item)
     {
         IConfiguration c = Config(new() { ["CommonSecrets:Mode"]="Development", ["CommonSecrets:Providers:One:Type"]="Configuration", ["CommonSecrets:Providers:Two:Type"]="Environment" });
         try { _ = CommonSecretsPolicy.ResolveProviderOrder(c.GetSection("CommonSecrets").Get<CommonSecretsOptions>()!, SecretProviderConfiguration.ReadProviders(c)); return Fail(item, "Multiple providers were accepted without explicit order.", "InvalidOperationException", "Accepted"); }
         catch (InvalidOperationException) { return Pass(item, "Multiple providers require explicit order.", "InvalidOperationException", "Rejected"); }
     }
 
-    private static EngineeringDiagnosticCheckResult SecretsProductionProviderPolicy(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult SecretsProductionProviderPolicy(DiagnosticLevelCatalogueEntry item)
     {
         IConfiguration c = Config(new() { ["CommonSecrets:Mode"]="Production", ["CommonSecrets:ProviderOrder:0"]="Fallback", ["CommonSecrets:Providers:Fallback:Type"]="Configuration" });
         try { CommonSecretsPolicy.Validate(c.GetSection("CommonSecrets").Get<CommonSecretsOptions>()!, SecretProviderConfiguration.ReadProviders(c)); return Fail(item, "Production accepted a non-production provider.", "Rejected", "Accepted"); }
         catch (InvalidOperationException) { return Pass(item, "Production rejects non-production provider types.", "Rejected", "Rejected"); }
     }
 
-    private static EngineeringDiagnosticCheckResult SecretsProductionHttps(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult SecretsProductionHttps(DiagnosticLevelCatalogueEntry item)
     {
         IConfiguration c = Config(new() { ["CommonSecrets:Mode"]="Production", ["CommonSecrets:ProviderOrder:0"]="Primary", ["CommonSecrets:Providers:Primary:Type"]="OpenBao", ["CommonSecrets:Providers:Primary:Settings:Enabled"]="true", ["CommonSecrets:Providers:Primary:Settings:RequireHttps"]="false", ["CommonSecrets:Providers:Primary:Settings:Address"]="http://openbao.example:8200" });
         try { CommonSecretsPolicy.Validate(c.GetSection("CommonSecrets").Get<CommonSecretsOptions>()!, SecretProviderConfiguration.ReadProviders(c)); return Fail(item, "Production accepted insecure OpenBao transport.", "Rejected", "Accepted"); }
         catch (InvalidOperationException) { return Pass(item, "Production enforces HTTPS for OpenBao.", "Rejected insecure transport", "Rejected"); }
     }
 
-    private static EngineeringDiagnosticCheckResult SecretsOfflineLocality(LevelXCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult SecretsOfflineLocality(DiagnosticLevelCatalogueEntry item)
     {
         IConfiguration c = Config(new() { ["CommonSecrets:Mode"]="OfflineDevelopment", ["CommonSecrets:ProviderOrder:0"]="LocalVault", ["CommonSecrets:Providers:LocalVault:Type"]="OpenBao", ["CommonSecrets:Providers:LocalVault:Settings:Enabled"]="true", ["CommonSecrets:Providers:LocalVault:Settings:RequireHttps"]="false", ["CommonSecrets:Providers:LocalVault:Settings:Address"]="https://remote.example:8200" });
         try { CommonSecretsPolicy.Validate(c.GetSection("CommonSecrets").Get<CommonSecretsOptions>()!, SecretProviderConfiguration.ReadProviders(c)); return Fail(item, "OfflineDevelopment accepted a remote provider.", "Rejected", "Accepted"); }
         catch (InvalidOperationException) { return Pass(item, "OfflineDevelopment enforces local provider policy.", "Rejected remote provider", "Rejected"); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> SecretsFallbackAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> SecretsFallbackAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var chain = new ChainedSecretProvider([new ProbeSecretProvider(null), new ProbeSecretProvider("present")]);
         string? value = await chain.GetAsync("diagnostic/key", ct);
         return value == "present" ? Pass(item, "Chained provider fallback selected the first non-empty provider.", "Fallback succeeds", "Succeeded") : Fail(item, "Chained provider fallback failed.", "Fallback succeeds", "Missing");
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> MessagingQueueAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> MessagingQueueAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var queue = new InMemoryExternalDeliveryQueue();
         ExternalDeliveryWorkItem work = WorkItem();
@@ -421,7 +421,7 @@ public sealed class CommonIsolatedCertificationCatalog
         return health.Pending == 1 ? Pass(item, "In-memory queue enqueue/health works.", "Pending=1", health.Pending.ToString()) : Fail(item, "In-memory queue pending metric is incorrect.", "1", health.Pending.ToString());
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> MessagingIdempotencyAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> MessagingIdempotencyAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var store = new InMemoryExternalDeliveryIdempotencyStore(); Guid id = Guid.NewGuid();
         bool before = await store.HasDeliveredAsync(id, "u", MessageChannel.Smtp, ct);
@@ -430,7 +430,7 @@ public sealed class CommonIsolatedCertificationCatalog
         return !before && after ? Pass(item, "In-memory idempotency transitions correctly.", "false -> true", $"{before} -> {after}") : Fail(item, "Idempotency transition failed.", "false -> true", $"{before} -> {after}");
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> MessagingRetryAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> MessagingRetryAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var queue = new InMemoryExternalDeliveryQueue(); ExternalDeliveryWorkItem work = WorkItem();
         await queue.RetryAsync(work, TimeSpan.Zero, ct);
@@ -441,7 +441,7 @@ public sealed class CommonIsolatedCertificationCatalog
         return attempt == 1 ? Pass(item, "Retry increments Attempt.", "1", attempt.ToString()) : Fail(item, "Retry attempt increment failed.", "1", attempt.ToString());
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> MessagingDeadLetterAccountingAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> MessagingDeadLetterAccountingAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         var queue = new InMemoryExternalDeliveryQueue(); ExternalDeliveryWorkItem work = WorkItem();
         await queue.EnqueueAsync(work, ct); await queue.DeadLetterAsync(work, "PROBE", ct);
@@ -449,7 +449,7 @@ public sealed class CommonIsolatedCertificationCatalog
         return h.Pending == 0 ? Pass(item, "Dead-letter removes work from active pending count.", "0", h.Pending.ToString()) : Fail(item, "Dead-letter accounting failed.", "0", h.Pending.ToString());
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> MessagingDurableRoundTripAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> MessagingDurableRoundTripAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("msg-file");
         try
@@ -464,7 +464,7 @@ public sealed class CommonIsolatedCertificationCatalog
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> MessagingDeadLetterPersistenceAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> MessagingDeadLetterPersistenceAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root = TempRoot("msg-dead");
         try
@@ -480,32 +480,32 @@ public sealed class CommonIsolatedCertificationCatalog
         finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> StorageVersionIncrementAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> StorageVersionIncrementAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root=TempRoot("sto-version"); try { var s=new LocalFileStorage(root); StoredFile a=await StoreText(s,"k.txt","one",ct); StoredFile b=await StoreText(s,"k.txt","two",ct); return b.Version==a.Version+1?Pass(item,"Version increments correctly.",$"{a.Version+1}",b.Version.ToString()):Fail(item,"Version increment failed.",(a.Version+1).ToString(),b.Version.ToString()); } finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> StorageDeleteAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> StorageDeleteAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root=TempRoot("sto-delete"); try { var s=new LocalFileStorage(root); await StoreText(s,"k.txt","one",ct); await s.DeleteAsync("k.txt",ct); StoredFile? m=await s.GetMetadataAsync("k.txt",ct); return m is null || m.Status is StorageStatus.Deleted or StorageStatus.Missing?Pass(item,"Delete semantics are valid.","Deleted or missing",m?.Status.ToString()??"Missing"):Fail(item,"Delete semantics failed.","Deleted or missing",m.Status.ToString()); } finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> StorageCorruptionAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> StorageCorruptionAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root=TempRoot("sto-corrupt"); try { var s=new LocalFileStorage(root); await StoreText(s,"k.txt","original",ct); await File.WriteAllTextAsync(Path.Combine(root,"k.txt"),"tampered",ct); try { await using Stream _=await s.OpenReadAsync("k.txt",ct); return Fail(item,"Corruption was not detected.","StorageException","Read succeeded"); } catch(StorageException){ return Pass(item,"Corruption is detected.","StorageException","Detected"); } } finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> StorageConcurrentAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> StorageConcurrentAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root=TempRoot("sto-concurrent"); try { var s=new LocalFileStorage(root); await Task.WhenAll(Enumerable.Range(0,4).Select(i=>StoreText(s,"k.txt","v"+i,ct))); IReadOnlyList<StoredFile> versions=await s.GetVersionsAsync("k.txt",ct); return versions.Count==4?Pass(item,"Concurrent writes serialized into valid versions.","4 versions",versions.Count.ToString()):Fail(item,"Concurrent write serialization failed.","4 versions",versions.Count.ToString()); } finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> StorageHistoryAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> StorageHistoryAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root=TempRoot("sto-history"); try { var s=new LocalFileStorage(root); await StoreText(s,"k.txt","one",ct); await StoreText(s,"k.txt","two",ct); await StoreText(s,"k.txt","three",ct); IReadOnlyList<StoredFile> versions=await s.GetVersionsAsync("k.txt",ct); bool ok=versions.Count==3&&versions.Select(x=>x.Version).Distinct().Count()==3; return ok?Pass(item,"Version history is complete and distinct.","3 distinct versions",$"{versions.Count} versions"):Fail(item,"Version history certification failed.","3 distinct versions",$"{versions.Count} versions"); } finally { Cleanup(root); }
     }
 
-    private static async Task<EngineeringDiagnosticCheckResult> StorageMultiObjectAsync(LevelXCatalogueEntry item, CancellationToken ct)
+    private static async Task<EngineeringDiagnosticCheckResult> StorageMultiObjectAsync(DiagnosticLevelCatalogueEntry item, CancellationToken ct)
     {
         string root=TempRoot("sto-multi"); try { var s=new LocalFileStorage(root); foreach(string k in new[]{"a.txt","b.txt","c.txt"}) await StoreText(s,k,k,ct); int ok=0; foreach(string k in new[]{"a.txt","b.txt","c.txt"}) { await using Stream st=await s.OpenReadAsync(k,ct); using var rd=new StreamReader(st); if(await rd.ReadToEndAsync(ct)==k) ok++; await s.DeleteAsync(k,ct); } return ok==3?Pass(item,"Multi-object isolated certification passed.","3 verified","3"):Fail(item,"Multi-object isolated certification failed.","3 verified",ok.ToString()); } finally { Cleanup(root); }
     }
@@ -513,28 +513,28 @@ public sealed class CommonIsolatedCertificationCatalog
     private static async Task<StoredFile> StoreText(LocalFileStorage storage,string key,string text,CancellationToken ct)
     {
         await using var ms=new MemoryStream(Encoding.UTF8.GetBytes(text));
-        return await storage.StoreAsync(new StorageWriteRequest(key,ms,"text/plain",Path.GetFileName(key),"LevelX"),ct);
+        return await storage.StoreAsync(new StorageWriteRequest(key,ms,"text/plain",Path.GetFileName(key),"DiagnosticLevel"),ct);
     }
 
     private static ExternalDeliveryWorkItem WorkItem()
     {
         Guid id=Guid.NewGuid();
-        return new ExternalDeliveryWorkItem(id,[new RecipientSnapshot("u","User","u@example.test",null,null,MessageChannel.Smtp)],MessageChannel.Smtp,new MessageRequest{RecipientIds=["u"],Title="LevelX",Body="Isolated"},null,null,DateTimeOffset.UtcNow);
+        return new ExternalDeliveryWorkItem(id,[new RecipientSnapshot("u","User","u@example.test",null,null,MessageChannel.Smtp)],MessageChannel.Smtp,new MessageRequest{RecipientIds=["u"],Title="DiagnosticLevel",Body="Isolated"},null,null,DateTimeOffset.UtcNow);
     }
 
     private static IConfiguration Config(Dictionary<string,string?> values)=>new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 
     private static string TempRoot(string name)
     {
-        string root=Path.Combine(Path.GetTempPath(),"aegis-levelx-"+name+"-"+Guid.NewGuid().ToString("N"));
+        string root=Path.Combine(Path.GetTempPath(),"aegis-diagnostic-level-"+name+"-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root); return root;
     }
     private static void Cleanup(string root){ try{ if(Directory.Exists(root))Directory.Delete(root,true);}catch{} }
 
     private static HttpResponseMessage Json(HttpStatusCode status, object body)=>new(status){Content=JsonContent.Create(body)};
 
-    private static EngineeringDiagnosticCheckResult Pass(LevelXCatalogueEntry item,string summary,string expected,string actual)=>new(item.TestId,$"{item.TestId} — {item.Name}",EngineeringDiagnosticStatus.Passed,summary,null,expected,actual);
-    private static EngineeringDiagnosticCheckResult Fail(LevelXCatalogueEntry item,string summary,string expected,string actual)=>new(item.TestId,$"{item.TestId} — {item.Name}",EngineeringDiagnosticStatus.Failed,summary,null,expected,actual);
+    private static EngineeringDiagnosticCheckResult Pass(DiagnosticLevelCatalogueEntry item,string summary,string expected,string actual)=>new(item.TestId,$"{item.TestId} — {item.Name}",EngineeringDiagnosticStatus.Passed,summary,null,expected,actual);
+    private static EngineeringDiagnosticCheckResult Fail(DiagnosticLevelCatalogueEntry item,string summary,string expected,string actual)=>new(item.TestId,$"{item.TestId} — {item.Name}",EngineeringDiagnosticStatus.Failed,summary,null,expected,actual);
 
     private sealed class ProbeHandler(Func<HttpRequestMessage,HttpResponseMessage> responder):HttpMessageHandler
     {

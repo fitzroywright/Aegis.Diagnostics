@@ -25,11 +25,19 @@ public sealed record LevelXStateExplanation(
     IReadOnlyList<string> Codes,
     string Reason);
 
+public interface ILevelXStateExplainService
+{
+    Task<LevelXStateExplanation?> ExplainAsync(
+        string applicationId,
+        string? instanceId,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed class LevelXStateExplainService(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     DiagnosticsOptions options,
-    ILogger<LevelXStateExplainService> logger)
+    ILogger<LevelXStateExplainService> logger) : ILevelXStateExplainService
 {
     public async Task<LevelXStateExplanation?> ExplainAsync(
         string applicationId,

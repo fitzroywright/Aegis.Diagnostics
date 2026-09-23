@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: fitzroywright/Common.Diagnostics
-          ref: main
+          ref: LevelX
           path: Common/Common.Diagnostics
 
       - name: Checkout Common.Messaging

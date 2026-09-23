@@ -235,6 +235,83 @@ internal static class DiagnosticsApi
             });
         });
 
+        app.MapPost("/api/engineering/diagnostics/diagnostic-level/remote-run", async (
+            EngineeringDiagnosticRunRequest request,
+            HttpContext c,
+            IDiagnosticTargetCatalog discovery,
+            RemoteDiagnosticLevelCoordinator coordinator,
+            IConfiguration configuration,
+            CancellationToken ct) =>
+        {
+            if (!Has(c, "Diagnostics.Run")) return Results.Forbid();
+            if (request.TargetType != DiagnosticTargetType.RegisteredApplication)
+                return Results.BadRequest(new { error = "Remote DiagnosticLevel execution requires a registered application target." });
+
+            try
+            {
+                EngineeringDiagnosticPolicy.ValidateLevel(request.Level);
+                EngineeringDiagnosticPolicy.ValidateReason(request.Level, request.Reason);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+
+            if (EngineeringDiagnosticLevelSemantics.IsDisruptive(request.Level) &&
+                !request.AcknowledgeDisruption)
+                return Results.BadRequest(new { error = "Levels 2 and 1 require explicit disruption acknowledgement." });
+
+            if (string.IsNullOrWhiteSpace(request.ApplicationId) ||
+                string.IsNullOrWhiteSpace(request.InstanceId))
+                return Results.BadRequest(new { error = "ApplicationId and InstanceId are required." });
+
+            DiagnosticTargetOptions? target = discovery.Targets.FirstOrDefault(x =>
+                string.Equals(x.ApplicationId, request.ApplicationId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.InstanceId ?? string.Empty, request.InstanceId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+            if (target is null)
+                return Results.NotFound(new { error = "Registered diagnostic target was not found in Configuration discovery." });
+
+            if (!target.SupportedLevels.Contains((int)request.Level))
+                return Results.BadRequest(new { error = $"Target does not advertise Diagnostic Level {(int)request.Level}." });
+
+            string? publicUrl = configuration["Aegis:PublicUrl"]?.Trim();
+            if (string.IsNullOrWhiteSpace(publicUrl) ||
+                !Uri.TryCreate(publicUrl.TrimEnd('/') + "/", UriKind.Absolute, out Uri? callbackBaseUri))
+                return Results.Problem(
+                    "Aegis.Diagnostics public URL is required for remote DiagnosticLevel completion callbacks.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+
+            RemoteDiagnosticLevelDispatchResult result = await coordinator.RequestAsync(
+                target,
+                request.Level,
+                OperatorName(c),
+                request.Reason,
+                callbackBaseUri,
+                ct);
+
+            if (!result.Accepted || result.Acceptance is null)
+            {
+                int status = result.DeliveryState == DiagnosticLevelDeliveryState.NotReachable
+                    ? StatusCodes.Status503ServiceUnavailable
+                    : StatusCodes.Status409Conflict;
+                return Results.Problem(result.Error ?? "Remote DiagnosticLevel request was not accepted.", statusCode: status);
+            }
+
+            return Results.Accepted(
+                $"/api/engineering/diagnostics/diagnostic-level/history/{result.Acceptance.RunId:D}",
+                new
+                {
+                    result.Acceptance.RunId,
+                    result.Acceptance.RequestId,
+                    result.Acceptance.CorrelationId,
+                    level = (int)result.Acceptance.Level,
+                    state = DiagnosticLevelExecutionState.Running.ToString(),
+                    delivery = result.DeliveryState.ToString(),
+                    result.Acceptance.Application,
+                    result.Acceptance.Component
+                });
+        });
+
         app.MapGet("/api/engineering/diagnostics/diagnostic-level/history", async (
             DateTimeOffset? fromUtc,
             DateTimeOffset? toUtc,
@@ -275,10 +352,20 @@ internal static class DiagnosticsApi
             return run is null ? Results.NotFound() : Results.Ok(run);
         });
 
-        app.MapGet("/api/engineering/diagnostics/diagnostic-level/live", (
+        app.MapGet("/api/engineering/diagnostics/diagnostic-level/live", async (
             HttpContext c,
-            RemoteDiagnosticLevelCoordinator coordinator) =>
-            View(c) ? Results.Ok(new { runs = coordinator.Pending }) : Results.Forbid());
+            RemoteDiagnosticLevelCoordinator coordinator,
+            IConfiguration configuration,
+            CancellationToken ct) =>
+        {
+            if (!View(c)) return Results.Forbid();
+            int staleSeconds = Math.Clamp(
+                configuration.GetValue("Diagnostics:RemoteRunStaleSeconds", 300),
+                30,
+                86400);
+            await coordinator.MarkUnknownAfterAsync(TimeSpan.FromSeconds(staleSeconds), ct);
+            return Results.Ok(new { runs = coordinator.Pending, staleAfterSeconds = staleSeconds });
+        });
 
         app.MapPost("/api/engineering/diagnostics/diagnostic-level/callback", async (
             DiagnosticLevelCompletionCallback callback,

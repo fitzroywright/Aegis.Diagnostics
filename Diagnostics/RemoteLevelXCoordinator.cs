@@ -73,13 +73,12 @@ public sealed class RemoteLevelXCoordinator(
         byte[] body = JsonSerializer.SerializeToUtf8Bytes(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         string timestamp = now.ToString("O");
         string nonce = Guid.NewGuid().ToString("N");
-        string signature = LevelXRequestSigning.CreateSignature(
+        string signature = LevelXRequestSigning.CreateRunRequestSignature(
             credential,
-            "POST",
             runUri.AbsolutePath,
             timestamp,
             nonce,
-            body);
+            request);
 
         using HttpRequestMessage message = new(HttpMethod.Post, runUri)
         {

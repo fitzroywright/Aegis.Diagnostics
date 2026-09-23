@@ -81,6 +81,7 @@ public sealed class CommonComponentDiagnosticCatalogTests
         public DateTimeOffset? LastSuccessfulRefreshUtc => DateTimeOffset.UtcNow;
         public string? LastError => null;
         public bool IsStale => false;
+        public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class EmptyExplainService : IDiagnosticLevelStateExplainService

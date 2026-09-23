@@ -171,7 +171,17 @@ public sealed class ConfigurationDiscoveryCatalog(
     {
         ConfigurationDiagnosticsCapability? capability = contract?.Diagnostics;
         string baseUrl = capability?.BaseUrl?.Trim() ?? string.Empty;
-        bool supportsRemote = capability?.SupportsRemoteDiagnostics ?? false;
+        bool hasRemoteDiagnosticContract =
+            capability is not null &&
+            !string.IsNullOrWhiteSpace(capability.BaseUrl) &&
+            !string.IsNullOrWhiteSpace(capability.DiagnosticsRunPath) &&
+            !string.IsNullOrWhiteSpace(capability.SecretName) &&
+            capability.SupportedLevels is { Length: > 0 };
+
+        bool supportsRemote =
+            capability?.SupportsRemoteDiagnostics == true ||
+            hasRemoteDiagnosticContract;
+
         bool supportsTelemetry = capability?.SupportsOperationalTelemetry ?? item.TelemetryAvailable;
 
         return new(

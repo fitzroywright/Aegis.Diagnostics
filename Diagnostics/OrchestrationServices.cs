@@ -215,6 +215,10 @@ public sealed class DiagnosticOrchestrationService(
                 string.IsNullOrWhiteSpace(request.TargetId)
                     ? throw new ArgumentException("TargetId is required for a Control Plane component.")
                     : request.TargetId),
+            DiagnosticTargetType.CommonComponent => DiagnosticTarget.CommonComponent(
+                string.IsNullOrWhiteSpace(request.TargetId)
+                    ? throw new ArgumentException("TargetId is required for a Common component.")
+                    : request.TargetId),
             DiagnosticTargetType.RegisteredApplication => DiagnosticTarget.RegisteredApplication(
                 string.IsNullOrWhiteSpace(request.ApplicationId)
                     ? throw new ArgumentException("ApplicationId is required for a registered application target.")

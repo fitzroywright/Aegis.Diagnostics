@@ -330,7 +330,10 @@ function clearRunningDiagnosticLevel(){
  localStorage.removeItem('aegis.diagnostics.activeRemoteLevel');
  setRunningDiagnosticLevel(0);
 }
-if(activeRemoteDiagnosticLevel)setRunningDiagnosticLevel(activeRemoteDiagnosticLevel);
+// Persisted browser state is only a recovery hint. Never show a running halo until
+// the server confirms that the run is still active.
+setDiagnosticLevelButtonsDisabled(false);
+document.querySelectorAll('.level[data-level]').forEach(button=>button.classList.remove('level-running'));
 let engineerRecorder=null,engineerChunks=[],engineerStream=null,pendingAudioBlob=null,pendingAudioName=null;
 async function toggleEngineerRecording(){
  const button=document.getElementById('engineerRecord'),state=document.getElementById('engineerRecordState');
@@ -561,22 +564,44 @@ async function loadDiagnosticLevelLive(){
      const warnings=tests.filter(t=>['Warning','InterventionRequired'].includes(hxTestStatusName(t.status))).length;
      const outcome=failed?failed+' failed':warnings?warnings+' warning':'all tests passed';
      cards=cards.filter(html=>!html.includes(esc(activeRemoteDiagnosticRunId)));
-     cards.unshift('<article class="diagnostic-level-live-card"><b>'+esc(run.application||'Unknown')+' · '+esc(run.component||'Unknown')+'</b><span class="live-state">'+esc(state)+' · LEVEL '+esc(run.level)+'</span><small>Run '+esc(run.runId)+'</small><small>Started '+esc(localDateTime(startedAt))+(finished?' · Stopped '+esc(localDateTime(completedAt||run.lastProgressAtUtc)):' · Elapsed '+esc(hxElapsed(startedAt)))+'</small>'+(run.currentTestId?'<small>Current test '+esc(run.currentTestId)+'</small>':'')+(finished?'<small>Result: '+esc(outcome)+'</small>':'<small>Last progress '+esc(localDateTime(run.lastProgressAtUtc||startedAt))+'</small>')+'</article>');
+     cards.unshift('<article class="diagnostic-level-live-card"><b>'+esc(run.application||'Unknown')+' · '+esc(run.component||'Unknown')+'</b><span class="live-state">'+esc(state)+' · LEVEL '+esc(run.level)+'</span><small>Run '+esc(run.runId)+'</small><small>Started '+esc(localDateTime(startedAt))+(finished?' · Stopped '+esc(localDateTime(completedAt||run.lastProgressAtUtc))+' · Duration '+esc(hxDuration(startedAt,completedAt||run.lastProgressAtUtc)):' · Elapsed '+esc(hxElapsed(startedAt)))+'</small>'+(run.currentTestName?'<small>Current test '+esc(run.currentTestName)+(run.currentTestId?' · '+esc(run.currentTestId):'')+'</small>':run.currentTestId?'<small>Current test '+esc(run.currentTestId)+'</small>':'')+(finished?'<small>Result: '+esc(outcome)+'</small>':'<small>Last progress '+esc(localDateTime(run.lastProgressAtUtc||startedAt))+'</small>')+'</article>');
+
      if(finished){
       setRunnerStatus(state,run.level,'Run '+run.runId);
-      localStorage.removeItem('aegis.diagnostics.activeRemoteRunId');
       activeRemoteDiagnosticRunId='';
       activeRemoteDiagnosticLevel=0;
+      localStorage.removeItem('aegis.diagnostics.activeRemoteRunId');
       localStorage.removeItem('aegis.diagnostics.activeRemoteLevel');
       document.querySelectorAll('.level[data-level]').forEach(button=>button.classList.remove('level-running'));
       setDiagnosticLevelButtonsDisabled(false);
+     }else if(!selectedLive){
+      // History says the run is active even if the coordinator was restarted.
+      activeRemoteDiagnosticLevel=Number(run.level)||0;
+      if(activeRemoteDiagnosticLevel){
+       setRunningDiagnosticLevel(activeRemoteDiagnosticLevel);
+       setRunnerStatus(state,activeRemoteDiagnosticLevel,run.currentTestName||run.currentTestId||'Diagnostic in progress');
+      }
      }
+    }else if(!selectedLive){
+     // The persisted browser RunId is no longer known by the server. Treat it as stale.
+     activeRemoteDiagnosticRunId='';
+     activeRemoteDiagnosticLevel=0;
+     localStorage.removeItem('aegis.diagnostics.activeRemoteRunId');
+     localStorage.removeItem('aegis.diagnostics.activeRemoteLevel');
+     document.querySelectorAll('.level[data-level]').forEach(button=>button.classList.remove('level-running'));
+     setDiagnosticLevelButtonsDisabled(false);
     }
-   }catch{}
+   }catch{
+    // A transient fetch failure must not create a false running indication.
+    if(!selectedLive){
+     document.querySelectorAll('.level[data-level]').forEach(button=>button.classList.remove('level-running'));
+     setDiagnosticLevelButtonsDisabled(false);
+    }
+   }
   }
 
   if(!cards.length){
-   if(!activeRemoteDiagnosticRunId){
+   if(!selectedLive && !activeRemoteDiagnosticRunId){
     clearRunningDiagnosticLevel();
     if(!document.getElementById('diagnosticIdleTile').classList.contains('status-error'))
       setRunnerStatus('IDLE',0,'No diagnostic active','idle');

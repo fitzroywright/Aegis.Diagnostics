@@ -319,7 +319,8 @@ const hxStateName=v=>typeof v==='string'&&!/^\\d+$/.test(v)?v:(hxStateNames[Numb
 const hxDeliveryName=v=>typeof v==='string'&&!/^\\d+$/.test(v)?v:(hxDeliveryNames[Number(v)]||String(v??'Unknown'));
 const hxTestStatusName=v=>typeof v==='string'&&!/^\\d+$/.test(v)?v:(hxTestStatusNames[Number(v)]||String(v??'Unknown'));
 const hxIso=v=>{if(!v)return'';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toISOString()};
-const hxElapsed=start=>{const s=new Date(start);if(Number.isNaN(s.getTime()))return'—';const sec=Math.max(0,Math.floor((Date.now()-s.getTime())/1000));return sec<60?sec+' sec':Math.floor(sec/60)+'m '+(sec%60)+'s'};
+const hxDuration=(start,end)=>{const s=new Date(start),e=end?new Date(end):new Date();if(Number.isNaN(s.getTime())||Number.isNaN(e.getTime()))return'—';const sec=Math.max(0,Math.floor((e.getTime()-s.getTime())/1000));return sec<60?sec+' sec':Math.floor(sec/60)+'m '+(sec%60)+'s'};
+const hxElapsed=start=>hxDuration(start,null);
 function hxQuery(){
  const p=new URLSearchParams(),set=(k,v)=>{if(v)p.set(k,v)};
  set('fromUtc',hxIso(document.getElementById('hxFrom').value));
@@ -353,7 +354,7 @@ async function loadDiagnosticLevelLive(){
     setRunningDiagnosticLevel(activeRemoteDiagnosticLevel);
    }
   }
-  let cards=list.map(v=>'<article class="diagnostic-level-live-card"><b>'+esc(v.applicationId||'Unknown')+' · '+esc(v.instanceId||'Default')+'</b><span class="live-state">'+esc(hxStateName(v.state))+' · LEVEL '+esc(v.level)+'</span><small>Run '+esc(v.runId)+'</small><small>Started '+esc(localDateTime(v.acceptedAtUtc))+' · Elapsed '+esc(hxElapsed(v.acceptedAtUtc))+'</small>'+(v.currentTestName?'<small><b>Running test:</b> '+esc(v.currentTestName)+(v.currentTestId?' · '+esc(v.currentTestId):'')+'</small>':v.currentTestId?'<small><b>Running test:</b> '+esc(v.currentTestId)+'</small>':'<small>Waiting for current test…</small>')+'<small>Last progress '+esc(localDateTime(v.lastUpdatedAtUtc))+'</small></article>');
+  let cards=list.map(v=>'<article class="diagnostic-level-live-card"><b>'+esc(v.applicationId||'Unknown')+' · '+esc(v.instanceId||'Default')+'</b><span class="live-state">'+esc(hxStateName(v.state))+' · LEVEL '+esc(v.level)+'</span><small>Run '+esc(v.runId)+'</small><small>Started '+esc(localDateTime(v.acceptedAtUtc))+' · Elapsed '+esc(hxElapsed(v.acceptedAtUtc))+'</small>'+(v.currentTestName?'<small><b>Running test:</b> '+esc(v.currentTestName)+(v.currentTestId?' · '+esc(v.currentTestId):'')+'</small>':v.currentTestId?'<small><b>Running test:</b> '+esc(v.currentTestId)+'</small>':'<small>Preparing next test…</small>')+'<small>Last progress '+esc(localDateTime(v.lastUpdatedAtUtc))+'</small></article>');
 
   if(activeRemoteDiagnosticRunId){
    try{
@@ -483,6 +484,7 @@ async function run(level){
 }
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>run(Number(b.dataset.level)));
 (async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([loadDiagnosticLevelTargets(),loadCatalogue(),load(),loadV2(),loadEngineerNotes(),loadDiagnosticLevelLive(),loadDiagnosticLevelHistory()]);}catch{location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);}})();
-setInterval(()=>{load();loadV2();loadEngineerNotes();loadDiagnosticLevelLive();loadDiagnosticLevelHistory();},3000);
+setInterval(()=>{loadDiagnosticLevelLive();},500);
+setInterval(()=>{load();loadV2();loadEngineerNotes();loadDiagnosticLevelHistory();},3000);
 </script>
 </body></html>

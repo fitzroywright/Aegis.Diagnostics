@@ -6,11 +6,16 @@
 <title>Engineering · Diagnostics</title>
 <link rel="stylesheet" href="/lcars.css">
 <style>
-.level[data-level="5"]{border-top-color:#66ccff}.level[data-level="5"] b{color:#66ccff}
-.level[data-level="4"]{border-top-color:#5588ee}.level[data-level="4"] b{color:#7fa6ff}
-.level[data-level="3"]{border-top-color:#ffcc66}.level[data-level="3"] b{color:#ffcc66}
-.level[data-level="2"]{border-top-color:#ff8a3d}.level[data-level="2"] b{color:#ff8a3d}
-.level[data-level="1"]{border-top-color:#ff3500}.level[data-level="1"] b{color:#ff3500}
+.level[data-level="5"]{--level-accent:#66ccff;border-top-color:var(--level-accent)}.level[data-level="5"] b{color:#66ccff}
+.level[data-level="4"]{--level-accent:#5588ee;border-top-color:var(--level-accent)}.level[data-level="4"] b{color:#7fa6ff}
+.level[data-level="3"]{--level-accent:#ffcc66;border-top-color:var(--level-accent)}.level[data-level="3"] b{color:#ffcc66}
+.level[data-level="2"]{--level-accent:#ff8a3d;border-top-color:var(--level-accent)}.level[data-level="2"] b{color:#ff8a3d}
+.level[data-level="1"]{--level-accent:#ff3500;border-top-color:var(--level-accent)}.level[data-level="1"] b{color:#ff3500}
+.level{transition:transform .12s ease,box-shadow .18s ease,filter .18s ease}
+.level.level-pressed{transform:translateY(2px) scale(.985);filter:brightness(1.15)}
+.level.level-running{position:relative;box-shadow:0 0 0 2px var(--level-accent),0 0 14px var(--level-accent),0 0 28px color-mix(in srgb,var(--level-accent) 55%,transparent);animation:diagnostic-level-halo 1.35s ease-in-out infinite}
+.level.level-running::after{content:"RUNNING";position:absolute;right:9px;top:7px;font-size:9px;font-weight:900;letter-spacing:.08em;color:var(--level-accent)}
+@keyframes diagnostic-level-halo{0%,100%{box-shadow:0 0 0 2px var(--level-accent),0 0 10px var(--level-accent),0 0 20px color-mix(in srgb,var(--level-accent) 35%,transparent)}50%{box-shadow:0 0 0 3px var(--level-accent),0 0 20px var(--level-accent),0 0 38px color-mix(in srgb,var(--level-accent) 60%,transparent)}}
 .level[data-level="5"]:hover{box-shadow:inset 0 0 0 1px #66ccff55}
 .level[data-level="4"]:hover{box-shadow:inset 0 0 0 1px #5588ee66}
 .level[data-level="3"]:hover{box-shadow:inset 0 0 0 1px #ffcc6666}
@@ -93,6 +98,23 @@
 const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason'),v2evidence=document.getElementById('v2evidence'),targetType=document.getElementById('targetType'),diagnosticTarget=document.getElementById('diagnosticTarget'),diagnosticLevelExplain=document.getElementById('diagnosticLevelExplain'),diagnosticLevelCatalogue=document.getElementById('diagnosticLevelCatalogue'),diagnosticLevelRunStatus=document.getElementById('diagnosticLevelRunStatus');
 let diagnosticLevelTargets={controlPlane:[],applications:[]};
 let activeRemoteDiagnosticRunId=localStorage.getItem('aegis.diagnostics.activeRemoteRunId')||'';
+let activeRemoteDiagnosticLevel=Number(localStorage.getItem('aegis.diagnostics.activeRemoteLevel')||0);
+function pressDiagnosticLevelButton(level){
+ const button=document.querySelector('.level[data-level="'+level+'"]');
+ if(!button)return;
+ button.classList.add('level-pressed');
+ setTimeout(()=>button.classList.remove('level-pressed'),180);
+}
+function setRunningDiagnosticLevel(level){
+ document.querySelectorAll('.level[data-level]').forEach(button=>
+  button.classList.toggle('level-running',Number(button.dataset.level)===Number(level)&&Number(level)>0));
+}
+function clearRunningDiagnosticLevel(){
+ activeRemoteDiagnosticLevel=0;
+ localStorage.removeItem('aegis.diagnostics.activeRemoteLevel');
+ setRunningDiagnosticLevel(0);
+}
+if(activeRemoteDiagnosticLevel)setRunningDiagnosticLevel(activeRemoteDiagnosticLevel);
 let engineerRecorder=null,engineerChunks=[],engineerStream=null,pendingAudioBlob=null,pendingAudioName=null;
 async function toggleEngineerRecording(){
  const button=document.getElementById('engineerRecord'),state=document.getElementById('engineerRecordState');
@@ -282,6 +304,18 @@ async function loadDiagnosticLevelLive(){
   const r=await fetch(api+'/diagnostic-level/live',{cache:'no-store'});
   if(!r.ok)throw new Error('HTTP '+r.status);
   const x=await r.json(),list=x.runs||[];
+  const selected=selectedDiagnosticApplication();
+  const selectedLive=list.find(v=>
+   !selected ||
+   (String(v.applicationId||'').toLowerCase()===String(selected.applicationId||'').toLowerCase() &&
+    String(v.instanceId||'').toLowerCase()===String(selected.instanceId||'').toLowerCase()));
+  if(selectedLive){
+   activeRemoteDiagnosticLevel=Number(selectedLive.level)||0;
+   if(activeRemoteDiagnosticLevel){
+    localStorage.setItem('aegis.diagnostics.activeRemoteLevel',String(activeRemoteDiagnosticLevel));
+    setRunningDiagnosticLevel(activeRemoteDiagnosticLevel);
+   }
+  }
   let cards=list.map(v=>'<article class="diagnostic-level-live-card"><b>'+esc(v.applicationId||'Unknown')+' · '+esc(v.instanceId||'Default')+'</b><span class="live-state">'+esc(hxStateName(v.state))+' · LEVEL '+esc(v.level)+'</span><small>Run '+esc(v.runId)+'</small><small>Started '+esc(localDateTime(v.acceptedAtUtc))+' · Elapsed '+esc(hxElapsed(v.acceptedAtUtc))+'</small>'+(v.currentTestName?'<small><b>Running test:</b> '+esc(v.currentTestName)+(v.currentTestId?' · '+esc(v.currentTestId):'')+'</small>':v.currentTestId?'<small><b>Running test:</b> '+esc(v.currentTestId)+'</small>':'<small>Waiting for current test…</small>')+'<small>Last progress '+esc(localDateTime(v.lastUpdatedAtUtc))+'</small></article>');
 
   if(activeRemoteDiagnosticRunId){
@@ -301,12 +335,16 @@ async function loadDiagnosticLevelLive(){
      if(finished){
       localStorage.removeItem('aegis.diagnostics.activeRemoteRunId');
       activeRemoteDiagnosticRunId='';
+      clearRunningDiagnosticLevel();
      }
     }
    }catch{}
   }
 
-  if(!cards.length)cards.push('<div class="diagnostic-level-live-card"><b class="live-state">IDLE</b><small>No remote DiagnosticLevel diagnostic is currently running.</small></div>');
+  if(!cards.length){
+   if(!activeRemoteDiagnosticRunId)clearRunningDiagnosticLevel();
+   cards.push('<div class="diagnostic-level-live-card"><b class="live-state">IDLE</b><small>No remote DiagnosticLevel diagnostic is currently running.</small></div>');
+  }
   el.innerHTML=cards.join('');
  }catch(e){el.innerHTML='<div class="notice">Live DiagnosticLevel state unavailable · '+esc(e.message)+'</div>';}
 }
@@ -373,6 +411,7 @@ async function readDiagnosticLevelError(response){
  return {message,detail};
 }
 async function run(level){
+ pressDiagnosticLevelButton(level);
  clearDiagnosticLevelRunStatus();
  if(level<=2&&!reason.value.trim()){showDiagnosticLevelRunStatus('error','DiagnosticLevel request not started','Levels 2 and 1 require an engineering reason.','Level '+level);window.aegisAudio?.play('warning');return;}
  if(level<=2&&!confirm('LEVEL '+level+' MAY EXECUTE DISRUPTIVE FAILURE/RECOVERY DIAGNOSTICS AGAINST ISOLATED DIAGNOSTIC TARGETS. CONTINUE?'))return;
@@ -392,7 +431,10 @@ async function run(level){
   const accepted=await r.json().catch(()=>null);
   if(accepted?.runId){
    activeRemoteDiagnosticRunId=accepted.runId;
+   activeRemoteDiagnosticLevel=level;
    localStorage.setItem('aegis.diagnostics.activeRemoteRunId',accepted.runId);
+   localStorage.setItem('aegis.diagnostics.activeRemoteLevel',String(level));
+   setRunningDiagnosticLevel(level);
   }
   showDiagnosticLevelRunStatus('success','DiagnosticLevel request accepted','Remote Level '+level+' run was accepted.'+(accepted?.application?' Target: '+accepted.application+'.':''),accepted?.runId?'Run '+accepted.runId:'HTTP '+r.status);
   window.aegisAudio?.play('success');

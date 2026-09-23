@@ -41,6 +41,7 @@
     </section>
     <section id="levelxExplain" class="levelx-explain-panel"></section>
     <section class="levels"><button class="level" data-level="5"><b>LEVEL 5</b>ROUTINE<small>State consistency and freshness</small></button><button class="level" data-level="4"><b>LEVEL 4</b>INTEGRATION<small>Cross-service validation</small></button><button class="level" data-level="3"><b>LEVEL 3</b>FUNCTIONAL<small>Functional workflow exercise</small></button><button class="level" data-level="2"><b>LEVEL 2</b>FAILURE / RECOVERY<small>Controlled disruptive validation</small></button><button class="level" data-level="1"><b>LEVEL 1</b>EXHAUSTIVE<small>Deep certification</small></button></section>
+    <div class="sectiontitle">Diagnostic Catalogue</div><section id="levelxCatalogue" class="runs"><div class="run muted">Loading test catalogue…</div></section>
     <section class="reason-panel"><label for="reason">Engineering reason / incident context</label><textarea id="reason" placeholder="Required for Levels 2 and 1"></textarea></section>
     <section class="engineer-notes panel">
       <div class="sectiontitle">Engineer&#39;s Notes</div>
@@ -61,7 +62,7 @@
 
 <script src="/session.js"></script>
 <script>
-const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason'),v2evidence=document.getElementById('v2evidence'),targetType=document.getElementById('targetType'),diagnosticTarget=document.getElementById('diagnosticTarget'),levelxExplain=document.getElementById('levelxExplain');
+const api='/api/engineering/diagnostics',runs=document.getElementById('runs'),reason=document.getElementById('reason'),v2evidence=document.getElementById('v2evidence'),targetType=document.getElementById('targetType'),diagnosticTarget=document.getElementById('diagnosticTarget'),levelxExplain=document.getElementById('levelxExplain'),levelxCatalogue=document.getElementById('levelxCatalogue');
 let levelxTargets={controlPlane:[],applications:[]};
 let engineerRecorder=null,engineerChunks=[],engineerStream=null,pendingAudioBlob=null,pendingAudioName=null;
 async function toggleEngineerRecording(){
@@ -148,6 +149,19 @@ async function loadV2(){
   v2evidence.innerHTML='<div class="notice">Operational V2 evidence is unavailable: '+esc(err.message)+'</div>';
  }
 }
+async function loadCatalogue(){
+ try{
+  const r=await fetch(api+'/levelx/catalogue',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
+  const d=await r.json(),tests=d.tests||[],summary=d.summary||[];
+  const components=[...new Set(summary.map(x=>x.component))];
+  levelxCatalogue.innerHTML='<article class="run"><div class="runmeta"><b>'+tests.length+' TESTS</b><br><small>Stable LevelX IDs</small></div><div><b>Common.* catalogue</b><div class="muted">Requested levels are cumulative: L5 only; L4 adds L4; L3 adds L3; L2 adds L2; L1 adds L1.</div></div><div class="status-Passed"><b>CATALOGUED</b></div></article>'+
+   components.map(component=>{
+    const rows=summary.filter(x=>x.component===component),count=rows.reduce((a,x)=>a+x.count,0);
+    const levels=[5,4,3,2,1].map(level=>'L'+level+': '+((rows.find(x=>x.level===level)||{}).count||0)).join(' · ');
+    return '<article class="run"><div class="runmeta"><b>'+esc(component)+'</b><br><small>'+count+' tests</small></div><div><b>'+esc(levels)+'</b><div class="muted">Level 5/4 tests are non-destructive; deeper Common tests use isolated temporary/in-memory certification scenarios unless explicitly documented otherwise.</div></div><div class="status-Passed"><b>'+count+'</b></div></article>';
+   }).join('');
+ }catch(e){levelxCatalogue.innerHTML='<div class="notice">Diagnostic catalogue unavailable: '+esc(e.message)+'</div>';}
+}
 async function loadLevelXTargets(){
  const r=await fetch(api+'/levelx/targets',{cache:'no-store'});if(!r.ok)throw new Error('Target inventory HTTP '+r.status);
  levelxTargets=await r.json();renderTargetOptions();
@@ -201,7 +215,7 @@ async function run(level){
  if(!r.ok){alert(await r.text());return;}await load();
 }
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>run(Number(b.dataset.level)));
-(async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([loadLevelXTargets(),load(),loadV2(),loadEngineerNotes()]);}catch{location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);}})();
+(async()=>{try{await window.aegisSession.refresh();applyPermissions();await Promise.all([loadLevelXTargets(),loadCatalogue(),load(),loadV2(),loadEngineerNotes()]);}catch{location.href='/auth/sso?returnUrl='+encodeURIComponent(location.pathname+location.search+location.hash);}})();
 setInterval(()=>{load();loadV2();loadEngineerNotes();},30000);
 </script>
 </body></html>

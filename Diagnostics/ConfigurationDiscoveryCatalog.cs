@@ -10,6 +10,7 @@ public interface IDiagnosticTargetCatalog
     DateTimeOffset? LastSuccessfulRefreshUtc { get; }
     string? LastError { get; }
     bool IsStale { get; }
+    Task RefreshAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class ConfigurationDiscoveryCatalog(
@@ -111,6 +112,10 @@ public sealed class ConfigurationDiscoveryCatalog(
                 .Select(item =>
                 {
                     contractsByIdentity.TryGetValue(IdentityKey(item.ApplicationId, item.InstanceId), out ConfigurationApplicationContract? contract);
+                    contract ??= contracts
+                        .Where(candidate => string.Equals(candidate.ApplicationId, item.ApplicationId, StringComparison.OrdinalIgnoreCase))
+                        .OrderByDescending(candidate => candidate.LastRegisteredAtUtc)
+                        .FirstOrDefault();
                     return ToTarget(item, contract);
                 })
                 .OrderBy(target => target.Name, StringComparer.OrdinalIgnoreCase)

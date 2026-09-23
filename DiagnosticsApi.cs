@@ -268,6 +268,8 @@ internal static class DiagnosticsApi
                 string.IsNullOrWhiteSpace(request.InstanceId))
                 return Results.BadRequest(new { error = "ApplicationId and InstanceId are required." });
 
+            await discovery.RefreshAsync(ct);
+
             DiagnosticTargetOptions? target = discovery.Targets.FirstOrDefault(x =>
                 string.Equals(x.ApplicationId, request.ApplicationId, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(x.InstanceId ?? string.Empty, request.InstanceId ?? string.Empty, StringComparison.OrdinalIgnoreCase));

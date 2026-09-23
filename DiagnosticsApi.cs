@@ -235,6 +235,76 @@ internal static class DiagnosticsApi
             });
         });
 
+        app.MapGet("/api/engineering/diagnostics/levelx/history", async (
+            DateTimeOffset? fromUtc,
+            DateTimeOffset? toUtc,
+            string? application,
+            string? component,
+            string? host,
+            int? level,
+            string? state,
+            string? testId,
+            Guid? correlationId,
+            string? requestedBy,
+            string? version,
+            int? take,
+            HttpContext c,
+            ILevelXRunStore store,
+            CancellationToken ct) =>
+        {
+            if (!View(c)) return Results.Forbid();
+            EngineeringDiagnosticLevel? parsedLevel = level is >= 1 and <= 5
+                ? (EngineeringDiagnosticLevel)level.Value
+                : null;
+            LevelXExecutionState? parsedState = Enum.TryParse<LevelXExecutionState>(state, true, out LevelXExecutionState stateValue)
+                ? stateValue
+                : null;
+            return Results.Ok(await store.QueryAsync(new LevelXHistoryQuery(
+                fromUtc, toUtc, application, component, host, parsedLevel, parsedState, testId,
+                correlationId, requestedBy, version, Math.Clamp(take ?? 100, 1, 1000)), ct));
+        });
+
+        app.MapGet("/api/engineering/diagnostics/levelx/history/{runId:guid}", async (
+            Guid runId,
+            HttpContext c,
+            ILevelXRunStore store,
+            CancellationToken ct) =>
+        {
+            if (!View(c)) return Results.Forbid();
+            LevelXRunRecord? run = await store.GetAsync(runId, ct);
+            return run is null ? Results.NotFound() : Results.Ok(run);
+        });
+
+        app.MapGet("/api/engineering/diagnostics/levelx/live", (
+            HttpContext c,
+            RemoteLevelXCoordinator coordinator) =>
+            View(c) ? Results.Ok(new { runs = coordinator.Pending }) : Results.Forbid());
+
+        app.MapPost("/api/engineering/diagnostics/levelx/callback", async (
+            LevelXCompletionCallback callback,
+            HttpContext c,
+            RemoteLevelXCoordinator coordinator,
+            ILevelXRunStore store,
+            CancellationToken ct) =>
+        {
+            if (!Machine(c) && !Has(c, "Diagnostics.Run")) return Results.Forbid();
+            if (!coordinator.AcceptCallback(callback, out string? error))
+                return Results.BadRequest(new { error });
+
+            LevelXRunRecord received = callback.Run with
+            {
+                DeliveryState = LevelXDeliveryState.Delivered
+            };
+            await store.SaveAsync(received, ct);
+            return Results.Ok(new
+            {
+                callback.RunId,
+                callback.RequestId,
+                callback.CorrelationId,
+                delivery = LevelXDeliveryState.Delivered.ToString()
+            });
+        });
+
         app.MapGet("/api/engineering/diagnostics/capabilities", (HttpContext c, RemoteDiagnosticCatalog catalog) => View(c) ? Results.Ok(catalog.GetCapabilities()) : Results.Forbid());
         app.MapGet("/api/engineering/diagnostics/telemetry", GetTelemetryAsync);
         app.MapGet("/api/engineering/diagnostics/playbooks", (HttpContext c, DiagnosticPlaybookCatalog catalog) => View(c) ? Results.Ok(catalog.GetAll()) : Results.Forbid());

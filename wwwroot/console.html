@@ -528,10 +528,14 @@ async function loadDiagnosticLevelLive(){
   if(!r.ok)throw new Error('HTTP '+r.status);
   const x=await r.json(),list=x.runs||[];
   const selected=selectedDiagnosticApplication();
-  const selectedLive=list.find(v=>
-   !selected ||
-   (String(v.applicationId||'').toLowerCase()===String(selected.applicationId||'').toLowerCase() &&
-    String(v.instanceId||'').toLowerCase()===String(selected.instanceId||'').toLowerCase()));
+  const terminalLiveStates=new Set(['Completed','Cancelled','Interrupted','NotStarted','Unknown']);
+  const selectedLive=list.find(v=>{
+   const state=hxStateName(v.state);
+   if(terminalLiveStates.has(state))return false;
+   return !selected ||
+    (String(v.applicationId||'').toLowerCase()===String(selected.applicationId||'').toLowerCase() &&
+     String(v.instanceId||'').toLowerCase()===String(selected.instanceId||'').toLowerCase());
+  });
   if(selectedLive){
    activeRemoteDiagnosticLevel=Number(selectedLive.level)||0;
    if(activeRemoteDiagnosticLevel){

@@ -287,9 +287,25 @@ internal static class DiagnosticsApi
             ILevelXRunStore store,
             CancellationToken ct) =>
         {
-            if (!Machine(c) && !Has(c, "Diagnostics.Run")) return Results.Forbid();
-            if (!coordinator.AcceptCallback(callback, out string? error))
-                return Results.BadRequest(new { error });
+            string applicationId = c.Request.Headers["X-Aegis-Application-Id"].ToString().Trim();
+            string instanceId = c.Request.Headers["X-Aegis-Instance-Id"].ToString().Trim();
+            string timestamp = c.Request.Headers["X-Aegis-Diagnostics-Timestamp"].ToString().Trim();
+            string nonce = c.Request.Headers["X-Aegis-Diagnostics-Nonce"].ToString().Trim();
+            string signature = c.Request.Headers["X-Aegis-Diagnostics-Signature"].ToString().Trim();
+
+            (bool accepted, bool duplicate, string? error) =
+                await coordinator.AuthenticateAndAcceptCallbackAsync(
+                    callback,
+                    applicationId,
+                    instanceId,
+                    c.Request.Path,
+                    timestamp,
+                    nonce,
+                    signature,
+                    ct);
+
+            if (!accepted)
+                return Results.Unauthorized();
 
             LevelXRunRecord received = callback.Run with
             {
@@ -301,6 +317,7 @@ internal static class DiagnosticsApi
                 callback.RunId,
                 callback.RequestId,
                 callback.CorrelationId,
+                duplicate,
                 delivery = LevelXDeliveryState.Delivered.ToString()
             });
         });

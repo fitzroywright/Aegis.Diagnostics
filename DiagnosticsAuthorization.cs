@@ -27,7 +27,10 @@ internal static class DiagnosticsAuthorization
     }
 
     private static bool RequiresAuthorization(HttpContext context) =>
-        context.Request.Path.StartsWithSegments("/api/engineering/diagnostics");
+        context.Request.Path.StartsWithSegments("/api/engineering/diagnostics") &&
+        !context.Request.Path.Equals(
+            "/api/engineering/diagnostics/levelx/callback",
+            StringComparison.OrdinalIgnoreCase);
 
     private static async Task<bool> IsAuthorizedAsync(HttpContext context, DiagnosticsOptions options, CancellationToken cancellationToken)
     {

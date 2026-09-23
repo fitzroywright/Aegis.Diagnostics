@@ -35,6 +35,7 @@ builder.Services.AddHostedService<ApplicationHealthMonitor>();
 builder.Services.AddDiagnosticsMessaging(builder.Configuration);
 builder.Services.AddSingleton<RemoteDiagnosticCatalog>();
 builder.Services.AddSingleton<LevelXStateExplainService>();
+builder.Services.AddSingleton<ILevelXStateExplainService>(services => services.GetRequiredService<LevelXStateExplainService>());
 builder.Services.AddSingleton<DiagnosticPlaybookCatalog>();
 builder.Services.AddSingleton<IncidentCorrelationService>();
 builder.Services.AddSingleton<IIncidentNotificationPublisher, CommonMessagingIncidentNotificationPublisher>();

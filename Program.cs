@@ -1,3 +1,4 @@
+using Common.Security.Integration;
 using Microsoft.AspNetCore.HttpOverrides;
 using Aegis.Diagnostics;
 using Common.Diagnostics;
@@ -5,6 +6,16 @@ using Common.Registration;
 using Common.Secrets;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+if (string.Equals(
+        builder.Configuration["SuiteSecurity:Mode"],
+        "ActiveDirectory",
+        StringComparison.OrdinalIgnoreCase))
+{
+    AuthenticationPluginLoader.Register(
+        builder.Services,
+        builder.Configuration,
+        builder.Environment.ContentRootPath);
+}
 DiagnosticsOptions diagnosticsOptions = builder.Configuration.GetSection("Diagnostics").Get<DiagnosticsOptions>() ?? new DiagnosticsOptions();
 if (string.IsNullOrWhiteSpace(diagnosticsOptions.EnvironmentName))
 {

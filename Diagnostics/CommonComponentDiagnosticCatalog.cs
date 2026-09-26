@@ -135,7 +135,7 @@ public sealed class CommonComponentDiagnosticCatalog(
             "SEC-002" => UniqueStrings(item, OperationalPermissions.All),
             "SEC-003" => CapabilityNames(item),
             "SEC-004" => RequiredPermissions(item),
-            "SEC-005" => LdapFilterEscaper.Escape("a*(b)\\c") == @"a\2a\28b\29\5cc" ? Pass(item, "LDAP metacharacters are escaped correctly.", @"a\2a\28b\29\5cc", LdapFilterEscaper.Escape("a*(b)\\c")) : Fail(item, "LDAP escaping invariant failed.", @"a\2a\28b\29\5cc", LdapFilterEscaper.Escape("a*(b)\\c")),
+            "SEC-005" => ActiveDirectoryLdapEscaping(item),
             "SEC-006" => UserNameNormalizer.GetUserNameWithoutDomain("EXAMPLE\\TestUser") == "testuser" && UserNameNormalizer.GetUserNameWithoutDomain("testuser@example.local") == "testuser" ? Pass(item, "Username normalization is consistent.", "testuser", "testuser") : Fail(item, "Username normalization invariant failed.", "testuser", "unexpected"),
             "SEC-007" => UserNameNormalizer.NormalizeLogin("TestUser", "example.local") == "testuser@example.local" ? Pass(item, "Login normalization is consistent.", "testuser@example.local", UserNameNormalizer.NormalizeLogin("TestUser", "example.local")) : Fail(item, "Login normalization invariant failed.", "testuser@example.local", UserNameNormalizer.NormalizeLogin("TestUser", "example.local")),
             "SEC-008" => await PermissionDenialAsync(item, ct),
@@ -450,6 +450,39 @@ public sealed class CommonComponentDiagnosticCatalog(
     private static void TryDeleteDirectory(string root)
     {
         try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
+    }
+
+    private static EngineeringDiagnosticCheckResult ActiveDirectoryLdapEscaping(DiagnosticLevelCatalogueEntry item)
+    {
+        const string expected = @"a\2a\28b\29\5cc";
+        try
+        {
+            string pluginPath = Path.Combine(AppContext.BaseDirectory, "plugins", "Common.Security.Plugin.ActiveDirectory.dll");
+            System.Reflection.Assembly? assembly = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(x => string.Equals(x.GetName().Name, "Common.Security.Plugin.ActiveDirectory", StringComparison.OrdinalIgnoreCase));
+
+            if (assembly is null)
+            {
+                if (!File.Exists(pluginPath))
+                    return Warn(item, "Active Directory authentication plugin is not staged on this Diagnostics host.", "Plugin staged when Active Directory authentication is enabled", "Not staged");
+
+                assembly = System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(pluginPath);
+            }
+
+            Type? escaper = assembly.GetType("Common.Security.Plugin.ActiveDirectory.LdapFilterEscaper", throwOnError: false);
+            System.Reflection.MethodInfo? escape = escaper?.GetMethod("Escape", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            if (escape is null)
+                return Fail(item, "Active Directory plugin does not expose its internal LDAP escaping implementation to diagnostics.", "Internal Escape(string) implementation", "Missing");
+
+            string actual = escape.Invoke(null, ["a*(b)\\c"]) as string ?? string.Empty;
+            return actual == expected
+                ? Pass(item, "LDAP metacharacters are escaped correctly by the Active Directory plugin.", expected, actual)
+                : Fail(item, "LDAP escaping invariant failed in the Active Directory plugin.", expected, actual);
+        }
+        catch (Exception ex)
+        {
+            return Fail(item, "Active Directory LDAP escaping diagnostic could not execute.", expected, ex.GetBaseException().Message);
+        }
     }
 
     private static EngineeringDiagnosticCheckResult Pass(DiagnosticLevelCatalogueEntry item, string summary, string expected, string actual, string? evidence = null) =>

@@ -1,9 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Common.Security.Authenticators;
+using Common.Security.Abstractions;
 using Common.Security.Models;
-using Common.Security.Options;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace Aegis.Diagnostics;
@@ -11,7 +10,7 @@ namespace Aegis.Diagnostics;
 internal sealed record SuiteIdentity(string UserName, string DisplayName, string Title, string[] Permissions);
 internal sealed record SuiteTicket(string Sub, string Name, string Title, string[] Permissions, string Audience, long Expires, string Nonce);
 
-internal sealed class SuiteSecurity(IConfiguration configuration, IHostEnvironment environment)
+internal sealed class SuiteSecurity(IConfiguration configuration, IHostEnvironment environment, IServiceProvider services)
 {
     private const string Cookie = "Aegis.Diagnostics.Session";
     private const string DevelopmentSigningKey = "Aegis-Suite-Development-Handoff-Key-v1-Operations-Configuration-Diagnostics";
@@ -33,13 +32,11 @@ internal sealed class SuiteSecurity(IConfiguration configuration, IHostEnvironme
         AuthenticationResult? result = null;
         if (Mode.Equals("ActiveDirectory", StringComparison.OrdinalIgnoreCase))
         {
-            var options = new ActiveDirectoryAuthenticationOptions
-            {
-                Domain = configuration["SuiteSecurity:ActiveDirectory:Domain"] ?? "",
-                SearchBase = configuration["SuiteSecurity:ActiveDirectory:SearchBase"] ?? "",
-                Servers = configuration.GetSection("SuiteSecurity:ActiveDirectory:Servers").Get<string[]>() ?? []
-            };
-            result = new ActiveDirectory(options).Authenticate(userName, password);
+            IAuthenticator? authenticator = services.GetService<IAuthenticator>();
+            if (authenticator is null)
+                throw new InvalidOperationException("SuiteSecurity ActiveDirectory mode requires a configured authentication plugin.");
+
+            result = authenticator.Authenticate(userName, password);
         }
         else if (Mode.Equals("Mock", StringComparison.OrdinalIgnoreCase) && configuration.GetValue("SuiteSecurity:Mock:Enabled", false))
         {

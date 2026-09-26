@@ -192,14 +192,23 @@ internal static class SuiteSecurityExtensions
             return Results.Redirect(target);
         });
 
-        app.MapPost("/auth/login", async (HttpContext context, SuiteSecurity security) =>
+        app.MapPost("/auth/login", async (HttpContext context, SuiteSecurity security, ILogger<SuiteSecurity> logger) =>
         {
             IFormCollection form = await context.Request.ReadFormAsync();
-            SuiteIdentity? identity = security.Authenticate(form["username"].ToString(), form["password"].ToString());
-            if (identity is null) return Results.Redirect("/login?error=1");
-            security.Set(context.Response, identity);
+            string userName = form["username"].ToString();
             string returnUrl = form["returnUrl"].ToString();
-            return Results.Redirect(returnUrl.Length > 0 ? returnUrl : "/");
+            try
+            {
+                SuiteIdentity? identity = security.Authenticate(userName, form["password"].ToString());
+                if (identity is null) return Results.Redirect("/login?error=1");
+                security.Set(context.Response, identity);
+                return Results.Redirect(SafeLocal(returnUrl) ? returnUrl : "/");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Diagnostics authentication backend failed for user {UserName}.", userName);
+                return Results.Redirect("/login?error=backend");
+            }
         });
 
         app.MapPost("/auth/handoff", async (HttpContext context, SuiteSecurity security) =>

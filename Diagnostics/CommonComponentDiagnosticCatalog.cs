@@ -34,7 +34,7 @@ public sealed class CommonComponentDiagnosticCatalog(
         new("DIA-002", CommonDiagnosticTargets.Diagnostics, "Run store registered", EngineeringDiagnosticLevel.Level5Scan, false, "Verify persistent diagnostic run storage is registered."),
         new("DIA-003", CommonDiagnosticTargets.Diagnostics, "Discovery freshness", EngineeringDiagnosticLevel.Level5Scan, false, "Verify Configuration-backed discovery has completed and is not stale."),
         new("DIA-004", CommonDiagnosticTargets.Diagnostics, "Target inventory available", EngineeringDiagnosticLevel.Level5Scan, false, "Verify at least one registered diagnostic target is discoverable."),
-        new("DIA-005", CommonDiagnosticTargets.Diagnostics, "Starfleet level ordering", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify Level 5 through Level 1 ordering and depth semantics."),
+        new("DIA-005", CommonDiagnosticTargets.Diagnostics, "Diagnostic level ordering", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify Level 5 through Level 1 ordering and depth semantics."),
         new("DIA-006", CommonDiagnosticTargets.Diagnostics, "UTC clock semantics", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify diagnostics freshness arithmetic is based on UTC DateTimeOffset."),
         new("DIA-007", CommonDiagnosticTargets.Diagnostics, "Diagnostic codes unique", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify DiagnosticLevel diagnostic code identifiers do not collide."),
         new("DIA-008", CommonDiagnosticTargets.Diagnostics, "Common target registry unique", EngineeringDiagnosticLevel.Level4Analysis, false, "Verify Common component target identifiers are unique."),
@@ -116,7 +116,7 @@ public sealed class CommonComponentDiagnosticCatalog(
             "DIA-002" => ServiceRegistered<IEngineeringDiagnosticRunStore>(item),
             "DIA-003" => DiscoveryFresh(item),
             "DIA-004" => discovery.Targets.Count > 0 ? Pass(item, "Diagnostic target inventory is populated.", "> 0 target", discovery.Targets.Count.ToString()) : Warn(item, "No registered diagnostic targets are currently discoverable.", "> 0 target", "0"),
-            "DIA-005" => StarfleetOrder(item),
+            "DIA-005" => DiagnosticLevelOrder(item),
             "DIA-006" => DateTimeOffset.UtcNow.Offset == TimeSpan.Zero ? Pass(item, "UTC clock semantics are correct.", "UTC offset 00:00", DateTimeOffset.UtcNow.Offset.ToString()) : Fail(item, "UTC clock semantics are inconsistent.", "UTC offset 00:00", DateTimeOffset.UtcNow.Offset.ToString()),
             "DIA-007" => UniqueStrings(item, [DiagnosticLevelDiagnosticCodes.StateDerivationMismatch, DiagnosticLevelDiagnosticCodes.StaleTelemetry, DiagnosticLevelDiagnosticCodes.StaleAuthority, DiagnosticLevelDiagnosticCodes.HealthMismatch, DiagnosticLevelDiagnosticCodes.AuthorityUnavailable, DiagnosticLevelDiagnosticCodes.ControlPlaneStateDivergence]),
             "DIA-008" => UniqueStrings(item, CommonDiagnosticTargets.Components),
@@ -184,12 +184,12 @@ public sealed class CommonComponentDiagnosticCatalog(
             : Pass(item, "Configuration discovery is current.", "Current discovery", $"Last success {discovery.LastSuccessfulRefreshUtc:O}");
     }
 
-    private static EngineeringDiagnosticCheckResult StarfleetOrder(DiagnosticLevelCatalogueEntry item)
+    private static EngineeringDiagnosticCheckResult DiagnosticLevelOrder(DiagnosticLevelCatalogueEntry item)
     {
-        int[] actual = EngineeringDiagnosticLevelSemantics.StarfleetOrder.Select(x => (int)x).ToArray();
+        int[] actual = EngineeringDiagnosticLevelSemantics.LevelOrder.Select(x => (int)x).ToArray();
         return actual.SequenceEqual([5,4,3,2,1])
-            ? Pass(item, "Starfleet level ordering is correct.", "5,4,3,2,1", string.Join(',', actual))
-            : Fail(item, "Starfleet level ordering is incorrect.", "5,4,3,2,1", string.Join(',', actual));
+            ? Pass(item, "Diagnostic level ordering is correct.", "5,4,3,2,1", string.Join(',', actual))
+            : Fail(item, "Diagnostic level ordering is incorrect.", "5,4,3,2,1", string.Join(',', actual));
     }
 
     private static EngineeringDiagnosticCheckResult UniqueStrings(DiagnosticLevelCatalogueEntry item, IEnumerable<string> values)

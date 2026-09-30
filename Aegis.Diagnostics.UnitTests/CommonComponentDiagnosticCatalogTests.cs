@@ -52,7 +52,7 @@ public sealed class CommonComponentDiagnosticCatalogTests
     {
         DiagnosticLevelCatalogueEntry[] entries = AllEntries().Where(x => x.Component.Equals(component, StringComparison.OrdinalIgnoreCase)).ToArray();
 
-        foreach (EngineeringDiagnosticLevel level in EngineeringDiagnosticLevelSemantics.StarfleetOrder)
+        foreach (EngineeringDiagnosticLevel level in EngineeringDiagnosticLevelSemantics.LevelOrder)
             Assert.True(entries.Count(x => x.IntroducedAtLevel == level) >= 2, $"{component} needs at least two discrete tests introduced at Level {(int)level}.");
     }
 

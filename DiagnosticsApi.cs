@@ -675,10 +675,10 @@ internal static class DiagnosticsApi
         return note;
     }
 
-    static bool Machine(HttpContext c)=>c.Items.TryGetValue("DiagnosticsMachineAuthorized",out object? value)&&value is true;
+    static bool Machine(HttpContext c)=>c.Items.ContainsKey("DiagnosticsMachineScopes");
     static bool Has(HttpContext c,string p)=>
         (c.Items.TryGetValue("SuiteIdentity",out object? v)&&v is SuiteIdentity i&&i.Permissions.Contains(p,StringComparer.OrdinalIgnoreCase)) ||
-        (Machine(c) && p is "Diagnostics.View" or "Diagnostics.Run");
+        (c.Items.TryGetValue("DiagnosticsMachineScopes",out var scopes) && scopes is string[] allowed && allowed.Contains(p,StringComparer.Ordinal));
     static bool View(HttpContext c)=>Has(c,"Diagnostics.View");
 
     private static async Task<IResult> GetTelemetryAsync(HttpContext context, CancellationToken ct)

@@ -10,6 +10,7 @@ public sealed class DiagnosticsOptions
     public bool RequireApiKey { get; init; } = true;
     public string ApiKeyHeader { get; init; } = "X-Aegis-Diagnostics-Key";
     public string MachineCredentialSecretName { get; init; } = "diagnostics/machine/Aegis.Diagnostics";
+    public string[] MachineCredentialScopes { get; init; } = ["Diagnostics.View", "Diagnostics.Run"];
     public string RunStorePath { get; init; } = "data/engineering-diagnostic-runs.json";
     public string IncidentStorePath { get; init; } = "data/operational-incidents.json";
     public int DiscoveryRefreshSeconds { get; init; } = 60;

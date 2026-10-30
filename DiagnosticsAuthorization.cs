@@ -39,7 +39,7 @@ internal static class DiagnosticsAuthorization
         if (operatorIdentity is not null)
         {
             context.Items["SuiteIdentity"] = operatorIdentity;
-            suiteSecurity.Set(context.Response, operatorIdentity);
+            await suiteSecurity.SignInAsync(context, operatorIdentity);
             return true;
         }
 
@@ -53,16 +53,10 @@ internal static class DiagnosticsAuthorization
 
         if (string.IsNullOrWhiteSpace(expected)) return false;
         bool authorized = context.Request.Headers.TryGetValue(options.ApiKeyHeader, out var supplied)
-            && FixedTimeEquals(expected, supplied.ToString());
-        if (authorized) context.Items["DiagnosticsMachineAuthorized"] = true;
+            && supplied.Count==1
+            && Common.Security.Services.MachineCredentialProof.MatchesSecret(expected, supplied[0]!);
+        if (authorized) context.Items["DiagnosticsMachineScopes"] = options.MachineCredentialScopes;
         return authorized;
     }
 
-    private static bool FixedTimeEquals(string expected, string supplied)
-    {
-        byte[] expectedBytes = Encoding.UTF8.GetBytes(expected);
-        byte[] suppliedBytes = Encoding.UTF8.GetBytes(supplied);
-        return expectedBytes.Length == suppliedBytes.Length
-            && CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes);
-    }
 }

@@ -54,7 +54,7 @@ builder.Services.AddSingleton<IncidentCorrelationService>();
 builder.Services.AddSingleton<IIncidentNotificationPublisher, CommonMessagingIncidentNotificationPublisher>();
 builder.Services.AddSingleton<DiagnosticOrchestrationService>();
 builder.Services.AddSingleton<RemoteDiagnosticLevelCoordinator>();
-builder.Services.AddSuiteSecurity();
+builder.Services.AddSuiteSecurity(builder.Configuration, builder.Environment);
 
 WebApplication app = builder.Build();
 app.UseForwardedHeaders(new ForwardedHeadersOptions
@@ -73,6 +73,10 @@ string configurationPublicUrl = AegisControlPlaneEndpoints.ResolvePublic(
     AegisControlPlaneService.Configuration,
     endpointLogger);
 app.MapSuiteSecurity(operationsPublicUrl, configurationPublicUrl);
+app.UseAuthentication();
+app.UseRateLimiter();
+app.InitializeCommonAccounts();
+app.MapCommonSuiteIdentityEndpoints();
 app.UseSuiteSecurity(operationsPublicUrl);
 app.UseDefaultFiles();
 app.UseStaticFiles();
